@@ -3,64 +3,56 @@ package fs
 import (
 	"errors"
 	"github.com/google/cayley"
-	"github.com/google/cayley/graph"
-	"github.com/sdcoffey/olympus/fs/model"
+	"os"
 )
 
-type FsWriteable interface {
-	Transaction() *graph.Transaction
-}
-
-type FsReadable interface {
-	Fields() []string
-	SetProp(link, value string) error
-	Iterator(graph *cayley.Handle) graph.Iterator
-}
+var globalFs *Fs
 
 type Fs struct {
 	Graph *cayley.Handle
 }
 
-func NewFs(graph *cayley.Handle) *Fs {
-	return &Fs{graph}
+type GraphWriter interface {
+	Write() error
+	Delete() error
 }
 
-func (fs *Fs) AddFile(of *model.OFile) error {
-	if of.ParentId != "" {
-		parent := model.NewFileWithId(of.ParentId)
-		fs.Stat(parent)
-		if !isDir(parent) {
-			return errors.New("Cannot add file as a child of a non-directory")
+func Init(graph *cayley.Handle) {
+	globalFs = &Fs{graph}
+}
+
+func GlobalFs() *Fs {
+	return globalFs
+}
+
+func addChild(parentId string, child *OFile) (err error) {
+	parent := FileWithId(parentId)
+	if !parent.IsDir() {
+		err = errors.New("Can't add file to a non-directory")
+		return
+	}
+
+	child.parentId = parent.Id
+	return child.Write()
+}
+
+func Rm(of *OFile) (err error) {
+	children := of.Children()
+	if len(children) > 0 {
+		for i := 0; i < len(children) && err == nil; i++ {
+			err = Rm(children[i])
 		}
 	}
 
-	fs.Graph.ApplyTransaction(of.Transaction())
-	return nil
+	return of.delete()
 }
 
-func (fs *Fs) Stat(readable FsReadable) (err error) {
-	it := readable.Iterator(fs.Graph)
-	defer it.Close()
+func MkDir(parentId string, name string) (f *OFile, err error) {
+	child := newFile(name)
+	child.mode = os.ModeDir
 
-	for i := 0; err == nil && cayley.RawNext(it); i++ {
-		readable.SetProp(readable.Fields()[i], fs.Graph.NameOf(it.Result()))
+	if err = addChild(parentId, child); err != nil {
+		return
 	}
-
-	return
-}
-
-func (fs *Fs) ListFiles(parentId string) (files []*model.OFile, err error) {
-	it := cayley.StartPath(fs.Graph, parentId).In("hasParent").BuildIterator()
-	files = make([]*model.OFile, 0, 10)
-
-	for i := 0; err == nil && cayley.RawNext(it); i++ {
-		of := model.NewFileWithId(fs.Graph.NameOf(it.Result()))
-		err = fs.Stat(of)
-		files = append(files, of)
-	}
-	return
-}
-
-func isDir(of *model.OFile) bool {
-	return of.Attr&int64(model.AttrDir) > 0
+	return child, err
 }
