@@ -1,6 +1,7 @@
 package model
 
 import (
+	"code.google.com/p/go-uuid/uuid"
 	"errors"
 	"fmt"
 	"github.com/google/cayley"
@@ -15,6 +16,11 @@ const (
 	attrLink   = "hasAttr"
 )
 
+// OFile Attributes
+const (
+	AttrDir = 1 << 2
+)
+
 type OFile struct {
 	Id       string
 	Name     string
@@ -23,14 +29,15 @@ type OFile struct {
 	Attr     int64
 }
 
-func (of OFile) Iterator(graph *cayley.Handle) graph.Iterator {
-	return cayley.StartPath(graph, of.Id).Out(parentLink).
-		Or(cayley.StartPath(graph, of.Id).Out(nameLink)).
-		Or(cayley.StartPath(graph, of.Id).Out(sizeLink)).
-		Or(cayley.StartPath(graph, of.Id).Out(attrLink)).BuildIterator()
+func NewFile() *OFile {
+	return &OFile{Id: uuid.NewUUID().String()}
 }
 
-func (of OFile) Transaction() *graph.Transaction {
+func NewFileWithId(id string) *OFile {
+	return &OFile{Id: id}
+}
+
+func (of *OFile) Transaction() *graph.Transaction {
 	transaction := cayley.NewTransaction()
 	transaction.AddQuad(cayley.Quad(of.Id, parentLink, of.ParentId, ""))
 	transaction.AddQuad(cayley.Quad(of.Id, nameLink, of.Name, ""))
@@ -38,6 +45,17 @@ func (of OFile) Transaction() *graph.Transaction {
 	transaction.AddQuad(cayley.Quad(of.Id, attrLink, fmt.Sprint(of.Attr), ""))
 
 	return transaction
+}
+
+func (of *OFile) Iterator(graph *cayley.Handle) graph.Iterator {
+	return cayley.StartPath(graph, of.Id).Out(parentLink).
+		Or(cayley.StartPath(graph, of.Id).Out(nameLink)).
+		Or(cayley.StartPath(graph, of.Id).Out(sizeLink)).
+		Or(cayley.StartPath(graph, of.Id).Out(attrLink)).BuildIterator()
+}
+
+func (of *OFile) Fields() []string {
+	return []string{parentLink, nameLink, sizeLink, attrLink}
 }
 
 func (of *OFile) SetProp(link, value string) (err error) {
