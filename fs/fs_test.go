@@ -1,138 +1,61 @@
 package fs
 
 import (
-	"github.com/google/cayley"
-	"github.com/sdcoffey/olympus/fs/model"
-	testify "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
-func TestAddFile(t *testing.T) {
-	cGraph, _ := cayley.NewMemoryGraph()
-	fs := NewFs(cGraph)
+func TestMkDir(t *testing.T) {
+	testInit()
 
-	f := model.NewFile()
-	f.ParentId = ""
-	f.Size = 1024
-	f.Name = "Folder"
-	f.Attr = 16
+	rootNode := newFile("root")
+	rootNode.mode = os.ModeDir
+	rootNode.Write()
 
-	err := fs.AddFile(f)
-
-	assert := testify.New(t)
-
-	assert.Nil(err)
-	assert.NotEmpty(f.Id)
-
-	p := cayley.StartPath(cGraph, f.Id).Out("hasParent")
-	p.Or(cayley.StartPath(cGraph, f.Id).Out("hasSize"))
-	p.Or(cayley.StartPath(cGraph, f.Id).Out("hasAttr"))
-	p.Or(cayley.StartPath(cGraph, f.Id).Out("isNamed"))
-
-	it := p.BuildIterator()
-	cayley.RawNext(it)
-
-	assert.Empty(cGraph.NameOf(it.Result()))
-
-	cayley.RawNext(it)
-	assert.Equal("1024", cGraph.NameOf(it.Result()))
-
-	cayley.RawNext(it)
-	assert.Equal("16", cGraph.NameOf(it.Result()))
-
-	cayley.RawNext(it)
-	assert.Equal("Folder", cGraph.NameOf(it.Result()))
+	child, err := MkDir(rootNode.Id, "child")
+	assert.Nil(t, err)
+	assert.NotNil(t, child)
+	assert.Equal(t, rootNode.Id, child.Parent().Id)
+	assert.EqualValues(t, 1, len(rootNode.Children()))
 }
 
-func TestStat(t *testing.T) {
-	cGraph, _ := cayley.NewMemoryGraph()
-	fs := NewFs(cGraph)
+func TestMkDir_returnsErrorWhenParentNotDir(t *testing.T) {
+	testInit()
 
-	f := model.OFile{
-		ParentId: "",
-		Size:     1024,
-		Name:     "Folder",
-		Attr:     16,
-	}
-	err := fs.AddFile(&f)
-	if err != nil {
-		t.Error(err)
-	}
+	rootNode := newFile("root")
+	rootNode.Write()
 
-	file := model.NewFileWithId(f.Id)
-	err = fs.Stat(file)
-	if err != nil {
-		t.Error(err)
-	}
-
-	assert := testify.New(t)
-	assert.EqualValues(f.Size, file.Size)
-	assert.Equal(f.Name, file.Name)
-	assert.EqualValues(f.Attr, file.Attr)
-	assert.Equal(f.ParentId, file.ParentId)
+	child, err := MkDir(rootNode.Id, "child")
+	assert.NotNil(t, err)
+	assert.Nil(t, child)
 }
 
-func TestListChildren(t *testing.T) {
-	assert := testify.New(t)
+func TestRm_deletesAllChildNodes(t *testing.T) {
+	testInit()
 
-	cGraph, _ := cayley.NewMemoryGraph()
-	fs := NewFs(cGraph)
+	root := newFile("root")
+	root.mode = os.ModeDir
+	root.Write()
 
-	parent := model.NewFile()
-	parent.Attr = model.AttrDir
-	parent.Name = "root"
-	parent.Size = 1034
+	child, _ := MkDir(root.Id, "child")
+	child2, _ := MkDir(root.Id, "child2")
+	MkDir(child2.Id, "child3")
 
-	child := model.NewFile()
-	child.ParentId = parent.Id
-	child.Name = "child1"
-	child.Attr = model.AttrDir
+	err := Rm(child2)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 0, len(child2.Children()))
 
-	child2 := model.NewFile()
-	child2.ParentId = parent.Id
-	child2.Name = "child2"
+	assert.EqualValues(t, 1, len(root.Children()))
 
-	child3 := model.NewFile()
-	child3.ParentId = child.Id
-	child3.Name = "child3"
+	fetchedChild3 := FileWithName(child2.Id, "child3")
+	assert.Nil(t, fetchedChild3)
 
-	err := fs.AddFile(parent)
-	assert.Nil(err)
+	err = Rm(child)
+	assert.Nil(t, err)
 
-	err = fs.AddFile(child)
-	assert.Nil(err)
+	assert.EqualValues(t, 0, len(root.Children()))
 
-	err = fs.AddFile(child2)
-	assert.Nil(err)
-
-	err = fs.AddFile(child3)
-	assert.Nil(err)
-
-	children, err := fs.ListFiles(parent.Id)
-	assert.Nil(err)
-	assert.EqualValues(2, len(children))
-	assert.EqualValues(child.Name, children[0].Name)
-	assert.EqualValues(child2.Name, children[1].Name)
-
-	children, err = fs.ListFiles(child.Id)
-	assert.Nil(err)
-	assert.EqualValues(1, len(children))
-	assert.EqualValues(child3.Name, children[0].Name)
-}
-
-func TestReturnsErrorWhenParentIsNonFolder(t *testing.T) {
-	cGraph, _ := cayley.NewMemoryGraph()
-	fs := NewFs(cGraph)
-
-	parent := model.NewFile()
-	parent.Name = "root"
-
-	fs.AddFile(parent)
-
-	child := model.NewFile()
-	child.Name = "child"
-	child.ParentId = parent.Id
-
-	err := fs.AddFile(child)
-	testify.NotNil(t, err)
+	fetchedChild := FileWithName(root.Id, "child")
+	assert.Nil(t, fetchedChild)
 }
