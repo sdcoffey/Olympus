@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/sdcoffey/olympus/env"
+)
+
 func main() {
-    // Nothing here yet
+	env.InitializeEnvironment()
 }
