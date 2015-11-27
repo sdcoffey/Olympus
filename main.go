@@ -32,6 +32,9 @@ func main() {
 	v1Router.HandleFunc("/rm/{fileId}", api.RmFile).Methods("DELETE")
 	v1Router.HandleFunc("/mkdir/{parentId}/{name}", api.MkDir).Methods("POST")
 	v1Router.HandleFunc("/cr/{parentId}/{name}", api.Cr).Methods("POST")
+	v1Router.HandleFunc("/update/{fileId}", api.Update).Methods("PATCH")
+	v1Router.HandleFunc("/hasBlocks/{fileId}", api.HasBlocks).Methods("GET")
+	v1Router.HandleFunc("/dd/{fileId}/{blockHash}/{offset}", api.WriteBlock).Methods("POST")
 
 	http.ListenAndServe(":3000", r)
 }

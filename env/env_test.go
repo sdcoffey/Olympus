@@ -3,6 +3,7 @@ package env
 import (
 	"github.com/stretchr/testify/assert"
 	"os"
+	"os/user"
 	"path/filepath"
 	"testing"
 )
@@ -16,11 +17,11 @@ func TestMain(m *testing.M) {
 func TestExists_returnsTrueForExistingFile(t *testing.T) {
 	file, _ := os.Create("test")
 	defer os.Remove(file.Name())
-	assert.True(t, exists("test"))
+	assert.True(t, Exists("test"))
 }
 
 func TestExists_returnsFalseForFakeFIle(t *testing.T) {
-	assert.False(t, exists("test"))
+	assert.False(t, Exists("test"))
 }
 
 func TestEnv(t *testing.T) {
@@ -44,7 +45,8 @@ func TestOlympusHome_returnsDefaultPathWhenEnvNotSet(t *testing.T) {
 	os.Clearenv()
 	oPath, err := olympusHome()
 	assert.Nil(t, err)
-	assert.Equal(t, "/Users/scoffey/.olympus", oPath)
+	user, _ := user.Current()
+	assert.Equal(t, user.HomeDir+"/.olympus", oPath)
 }
 
 func TestInitializeEnvironment_createsCorrectDirctories(t *testing.T) {
@@ -56,10 +58,10 @@ func TestInitializeEnvironment_createsCorrectDirctories(t *testing.T) {
 	err = InitializeEnvironment()
 	assert.Nil(t, err)
 
-	assert.True(t, exists(filepath.Join(home, "dat")))
-	assert.True(t, exists(filepath.Join(home, "db")))
-	assert.True(t, exists(filepath.Join(home, "cfg")))
-	assert.True(t, exists(filepath.Join(home, "log")))
+	assert.True(t, Exists(filepath.Join(home, "dat")))
+	assert.True(t, Exists(filepath.Join(home, "db")))
+	assert.True(t, Exists(filepath.Join(home, "cfg")))
+	assert.True(t, Exists(filepath.Join(home, "log")))
 }
 
 func wd() string {
