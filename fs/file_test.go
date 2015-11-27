@@ -27,11 +27,11 @@ func TestFileWithName(t *testing.T) {
 
 	file := newFile("root")
 	file.mode = os.ModeDir
-	file.Write()
+	file.Save()
 
 	child := newFile("child")
 	child.parentId = file.Id
-	child.Write()
+	child.Save()
 
 	fetchedChild := FileWithName(file.Id, "child")
 	assert.NotNil(t, fetchedChild)
@@ -43,7 +43,7 @@ func TestName(t *testing.T) {
 
 	file := newFile("root")
 	file.name = "A cool folder"
-	file.Write()
+	file.Save()
 
 	fromDisk := FileWithId(file.Id)
 
@@ -62,7 +62,7 @@ func TestSize(t *testing.T) {
 
 	file := newFile("root")
 	file.size = 1024
-	file.Write()
+	file.Save()
 
 	fromDisk := FileWithId(file.Id)
 	assert.EqualValues(t, file.size, fromDisk.Size())
@@ -73,7 +73,7 @@ func TestMode(t *testing.T) {
 
 	file := newFile("root")
 	file.mode = os.ModeDir
-	file.Write()
+	file.Save()
 
 	fromDisk := FileWithId(file.Id)
 	assert.EqualValues(t, file.mode, fromDisk.Mode())
@@ -84,7 +84,7 @@ func TestIsDir(t *testing.T) {
 
 	file := newFile("root")
 	file.mode = os.ModeDir
-	file.Write()
+	file.Save()
 
 	fromDisk := FileWithId(file.Id)
 	assert.True(t, fromDisk.IsDir())
@@ -94,7 +94,7 @@ func TestModTime(t *testing.T) {
 	testInit()
 
 	file := newFile("root")
-	file.Write()
+	file.Save()
 
 	fromDisk := FileWithId(file.Id)
 	assert.NotEmpty(t, fromDisk.ModTime())
@@ -104,18 +104,16 @@ func TestModTime(t *testing.T) {
 func TestChildren(t *testing.T) {
 	testInit()
 
-	rootNode := newFile("root")
-	rootNode.mode = os.ModeDir
-	rootNode.Write()
+	rootNode, _ := RootNode()
 
 	childNode1 := newFile("child1")
 	childNode1.parentId = rootNode.Id
-	childNode1.Write()
+	childNode1.Save()
 
 	childNode2 := newFile("child2")
-	childNode2.mode = os.ModeDir
+	childNode2.mode |= os.ModeDir
 	childNode2.parentId = rootNode.Id
-	childNode2.Write()
+	childNode2.Save()
 
 	children := rootNode.Children()
 	assert.EqualValues(t, 2, len(children))
@@ -131,7 +129,7 @@ func TestChildren(t *testing.T) {
 
 	childNode3 := newFile("child3")
 	childNode3.parentId = childNode2.Id
-	childNode3.Write()
+	childNode3.Save()
 
 	children = childNode2.Children()
 	assert.EqualValues(t, 1, len(children))
@@ -144,20 +142,20 @@ func TestParent(t *testing.T) {
 
 	rootNode := newFile("root")
 	rootNode.mode = os.ModeDir
-	rootNode.Write()
+	rootNode.Save()
 
 	assert.Nil(t, rootNode.Parent())
 
 	childNode := newFile("child")
 	childNode.parentId = rootNode.Id
-	childNode.Write()
+	childNode.Save()
 
 	assert.Equal(t, rootNode.Id, childNode.Parent().Id)
 	assert.Equal(t, rootNode.name, childNode.Parent().Name())
 	assert.EqualValues(t, rootNode.mode, childNode.Parent().Mode())
 }
 
-func TestWrite(t *testing.T) {
+func TestSave(t *testing.T) {
 	testInit()
 
 	mTime := time.Now()
@@ -167,7 +165,7 @@ func TestWrite(t *testing.T) {
 	file.mode = os.ModeSticky
 	file.mTime = mTime
 
-	err := file.Write()
+	err := file.Save()
 	assert.Nil(t, err)
 
 	g := GlobalFs().Graph
@@ -189,61 +187,40 @@ func TestWrite(t *testing.T) {
 	assertProperty(fmt.Sprint(int(os.ModeSticky)), it)
 }
 
-func TestWrite_overwriteExistingProperty(t *testing.T) {
+func TestSave_overwriteExistingProperty(t *testing.T) {
 	testInit()
 
 	file := newFile("root")
-	file.mode = os.ModeDir
+	file.mode |= os.ModeDir
 
-	err := file.Write()
+	err := file.Save()
 	assert.Nil(t, err)
 
 	file.name = "root2"
-	err = file.Write()
+	err = file.Save()
 	assert.Nil(t, err)
 	assert.Equal(t, "root2", file.Name())
 }
 
-func TestWrite_returnsErrorWhenFileHasNoName(t *testing.T) {
+func TestSave_returnsErrorWhenFileHasNoName(t *testing.T) {
 	testInit()
 
 	file := newFile("")
-	err := file.Write()
-	assert.NotNil(t, err)
-}
-
-func TestWrite_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
-	testInit()
-
-	file := newFile("root")
-	file.mode = os.ModeDir
-	file.Write()
-
-	child1 := newFile("child")
-	child1.parentId = file.Id
-	child2 := newFile("child")
-	child2.parentId = file.Id
-
-	err := child1.Write()
-	assert.Nil(t, err)
-	err = child2.Write()
+	err := file.Save()
 	assert.NotNil(t, err)
 }
 
 func TestDelete(t *testing.T) {
 	testInit()
 
-	file := newFile("root")
-	file.mode = os.ModeDir
-	file.size = 1024
-	file.Write()
+	file, _ := RootNode()
 
 	err := file.delete()
 	assert.Nil(t, err)
 
 	assert.Zero(t, file.Name())
 	assert.Zero(t, file.Size())
-	assert.EqualValues(t, 1, file.Mode())
+	assert.EqualValues(t, 0, file.Mode())
 	assert.Zero(t, file.ModTime())
 
 	fetchedFile := FileWithId(file.Id)
@@ -255,11 +232,11 @@ func TestDelete_returnsErrorWhenNodeHasChildren(t *testing.T) {
 
 	file := newFile("root")
 	file.mode = os.ModeDir
-	file.Write()
+	file.Save()
 
 	child := newFile("child")
 	child.parentId = file.Id
-	child.Write()
+	child.Save()
 
 	err := file.delete()
 	assert.NotNil(t, err)
@@ -274,6 +251,6 @@ func BenchmarkWrite(b *testing.B) {
 		file := newFile(fmt.Sprint(i))
 		file.mode = os.ModeDir
 		file.parentId = lastId
-		err = file.Write()
+		err = file.Save()
 	}
 }

@@ -24,7 +24,7 @@ func TestMkDir_returnsErrorWhenParentNotDir(t *testing.T) {
 	testInit()
 
 	rootNode := newFile("root")
-	rootNode.Write()
+	rootNode.Save()
 
 	child, err := MkDir(rootNode.Id, "child")
 	assert.NotNil(t, err)
@@ -39,7 +39,7 @@ func TestRootNode_CreatesRootNode(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, root)
 	assert.Equal(t, "rootNode", root.Id)
-	assert.EqualValues(t, os.ModeDir, root.Mode())
+	assert.EqualValues(t, 700|os.ModeDir, root.Mode())
 
 	it := cayley.StartPath(GlobalFs().Graph, "rootNode").Out(nameLink).BuildIterator()
 	assert.True(t, cayley.RawNext(it))
@@ -136,4 +136,60 @@ func TestMv_throwsWhenMovingNodeInsideItself(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "move file inside itself")
+}
+
+func TestChmod_chmodsSuccessfully(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	child := newFile("child")
+	addChild(root.Id, child)
+
+	err := Chmod(child, os.FileMode(777))
+	assert.Nil(t, err)
+	assert.EqualValues(t, 777, child.Mode())
+}
+
+func TestChmod_throwsWhenChangingDirToFile(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	child, _ := MkDir(root.Id, "child")
+	err := Chmod(child, 1)
+	assert.NotNil(t, err)
+}
+
+func TestChmod_throwWhenChangingFileToDir(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	child := newFile("file")
+	addChild(root.Id, child)
+
+	err := Chmod(child, os.ModeDir)
+	assert.NotNil(t, err)
+}
+
+func TestAddChild_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
+	testInit()
+
+	file, _ := RootNode()
+	child1 := newFile("child")
+	err := addChild(file.Id, child1)
+	assert.Nil(t, err)
+
+	child2 := newFile("child")
+	err = addChild(file.Id, child2)
+	assert.NotNil(t, err)
+}
+
+func TestAddChild_throwsWhenParentDoesNotExist(t *testing.T) {
+	testInit()
+
+	orphan := newFile("file")
+	err := addChild("not-a-file", orphan)
+	assert.NotNil(t, err)
 }

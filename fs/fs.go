@@ -2,8 +2,10 @@ package fs
 
 import (
 	"errors"
+	"fmt"
 	"github.com/google/cayley"
 	"os"
+	"time"
 )
 
 var globalFs *Fs
@@ -14,7 +16,7 @@ type Fs struct {
 }
 
 type GraphWriter interface {
-	Write() error
+	Save() error
 	Delete() error
 }
 
@@ -35,8 +37,8 @@ func RootNode() (root *OFile, err error) {
 	if root = FileWithId("rootNode"); !root.Exists() {
 		root = newFile("root")
 		root.Id = "rootNode"
-		root.mode = os.ModeDir
-		err = root.Write()
+		root.mode |= os.ModeDir
+		err = root.Save()
 	}
 
 	return
@@ -45,12 +47,15 @@ func RootNode() (root *OFile, err error) {
 func addChild(parentId string, child *OFile) (err error) {
 	parent := FileWithId(parentId)
 	if !parent.IsDir() {
-		err = errors.New("Cannot add file to a non-directory")
-		return
+		return errors.New("Cannot add file to a non-directory")
+	} else if FileWithId(parentId).Exists() && FileWithName(parentId, child.name) != nil {
+		return errors.New(fmt.Sprintf("File with name %s already exists in %s", child.name, FileWithId(parentId).Name()))
+	} else if !FileWithId(parentId).Exists() {
+		return errors.New(fmt.Sprint("Parent ", parentId, " does not exist"))
 	}
 
 	child.parentId = parent.Id
-	return child.Write()
+	return child.Save()
 }
 
 func Rm(of *OFile) (err error) {
@@ -70,7 +75,7 @@ func Rm(of *OFile) (err error) {
 
 func MkDir(parentId string, name string) (f *OFile, err error) {
 	child := newFile(name)
-	child.mode = os.ModeDir
+	child.mode |= os.ModeDir
 
 	if err = addChild(parentId, child); err != nil {
 		return
@@ -83,21 +88,40 @@ func Mv(of *OFile, newName, newParentId string) (err error) {
 		return errors.New("Cannot move root node")
 	} else if newParentId == of.Id {
 		return errors.New("Cannot move file inside itself")
+	} else if newParentId == of.Parent().Id && newName == of.Name() {
+		return nil
 	}
 
 	if of.Name() != newName {
-		if err = GlobalFs().Graph.QuadWriter.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), "")); err != nil {
-			return
-		} else {
-			of.name = newName
-		}
-	}
-
-	if err = GlobalFs().Graph.QuadWriter.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, "")); err != nil {
-		return
-	} else {
-		of.parentId = ""
+		of.name = newName
 	}
 
 	return addChild(newParentId, of)
+}
+
+func Chmod(of *OFile, newMode os.FileMode) (err error) {
+	if of.IsDir() != (newMode&os.ModeDir > 0) {
+		return errors.New("Cannot merge file into folder")
+	}
+
+	of.mode = newMode
+	return of.Save()
+}
+
+func MkFile(name, parentId string, size int64, mTime time.Time) (of *OFile, err error) {
+	of = newFile(name)
+	of.size = size
+	of.mTime = mTime
+
+	if err = addChild(parentId, of); err != nil {
+		of = nil
+		return
+	}
+
+	return
+}
+
+func Touch(file *OFile, mTime time.Time) (err error) {
+	file.mTime = mTime
+	return file.Save()
 }
