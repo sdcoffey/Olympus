@@ -59,3 +59,53 @@ func TestRm_deletesAllChildNodes(t *testing.T) {
 	fetchedChild := FileWithName(root.Id, "child")
 	assert.Nil(t, fetchedChild)
 }
+
+func TestMv_movesNodeSuccessfully(t *testing.T) {
+	testInit()
+
+	root := newFile("root")
+	root.mode = os.ModeDir
+	root.Write()
+
+	child1, _ := MkDir(root.Id, "child1")
+	child2, _ := MkDir(root.Id, "child2")
+
+	assert.EqualValues(t, 2, len(root.Children()))
+
+	err := Mv(child2, child2.Name(), child1.Id)
+	assert.Nil(t, err)
+
+	assert.EqualValues(t, 1, len(root.Children()))
+	assert.EqualValues(t, 1, len(child1.Children()))
+
+	child := child1.Children()[0]
+	assert.Equal(t, child2.Id, child.Id)
+	assert.Equal(t, child1.Id, child.parentId)
+}
+
+func TestMv_renamesNodeSuccessfully(t *testing.T) {
+	testInit()
+
+	root := newFile("root")
+	root.mode = os.ModeDir
+	root.Write()
+
+	child, _ := MkDir(root.Id, "child")
+	assert.Equal(t, "child", child.Name())
+
+	err := Mv(child, "THE child", root.Id)
+	assert.Nil(t, err)
+	assert.Equal(t, "THE child", child.Name())
+	assert.Equal(t, root.Id, child.Parent().Id)
+}
+
+func TestMv_throwsWhenMovingRootNode(t *testing.T) {
+	testInit()
+
+	root := newFile("root")
+	root.mode = os.ModeDir
+	root.Write()
+
+	err := Mv(root, "root", "abcd-new-parent")
+	assert.NotNil(t, err)
+}

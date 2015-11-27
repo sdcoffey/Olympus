@@ -56,3 +56,27 @@ func MkDir(parentId string, name string) (f *OFile, err error) {
 	}
 	return child, err
 }
+
+func Mv(of *OFile, newName, newParentId string) (err error) {
+	if of.Parent() == nil {
+		return errors.New("Cannot move root node")
+	} else if newParentId == of.Id {
+		return errors.New("Cannot move file inside itself")
+	}
+
+	if of.Name() != newName {
+		if err = GlobalFs().Graph.QuadWriter.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), "")); err != nil {
+			return
+		} else {
+			of.name = newName
+		}
+	}
+
+	if err = GlobalFs().Graph.QuadWriter.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, "")); err != nil {
+		return
+	} else {
+		of.parentId = ""
+	}
+
+	return addChild(newParentId, of)
+}

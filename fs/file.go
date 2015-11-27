@@ -59,6 +59,8 @@ func (of *OFile) Name() string {
 		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(nameLink).BuildIterator()
 		if cayley.RawNext(it) {
 			of.name = GlobalFs().Graph.NameOf(it.Result())
+		} else {
+			of.name = ""
 		}
 	}
 
@@ -70,6 +72,8 @@ func (of *OFile) Size() int64 {
 		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(sizeLink).BuildIterator()
 		if cayley.RawNext(it) {
 			of.size, _ = strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64)
+		} else {
+			of.size = 0
 		}
 	}
 
@@ -82,6 +86,8 @@ func (of *OFile) Mode() os.FileMode {
 		if cayley.RawNext(it) {
 			mode, _ := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64)
 			of.mode = os.FileMode(mode)
+		} else {
+			of.mode = 1
 		}
 	}
 
@@ -94,6 +100,8 @@ func (of *OFile) ModTime() time.Time {
 		if cayley.RawNext(it) {
 			unixTime, _ := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64)
 			of.mTime = time.Unix(unixTime, 0)
+		} else {
+			of.mTime = time.Time{}
 		}
 	}
 
@@ -118,6 +126,8 @@ func (of *OFile) Parent() *OFile {
 				of.parentId = id
 				return FileWithId(id)
 			}
+		} else {
+			of.parentId = ""
 		}
 	} else {
 		return FileWithId(of.parentId)
@@ -143,29 +153,31 @@ func (of *OFile) Children() []*OFile {
 }
 
 // interface GraphWriter
-func (of *OFile) Write() error {
-
-	transaction := cayley.NewTransaction()
-
-	if of.parentId != "" {
-		transaction.AddQuad(cayley.Quad(of.Id, parentLink, of.parentId, ""))
-	}
-
-	if of.name != "" {
-		transaction.AddQuad(cayley.Quad(of.Id, nameLink, of.name, ""))
-	} else {
-		return errors.New("Cannot add nameless file")
-	}
-
+func (of *OFile) Write() (err error) {
 	if of.Parent() != nil && FileWithName(of.Parent().Id, of.name) != nil {
 		return errors.New(fmt.Sprintf("File with name %s already exists in %s", of.Name(), of.Parent().Name()))
+	} else if of.name == "" {
+		return errors.New("cannot add nameless file")
 	}
 
-	transaction.AddQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.size), ""))
-	transaction.AddQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.mode)), ""))
-	transaction.AddQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.mTime.Unix()), ""))
+	quads := make([]quad.Quad, 4, 5)
+	quads[0] = cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.size), "")
+	quads[1] = cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.mode)), "")
+	quads[2] = cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.mTime.Unix()), "")
+	quads[3] = cayley.Quad(of.Id, nameLink, of.name, "")
 
-	return GlobalFs().Graph.ApplyTransaction(transaction)
+	if of.parentId != "" {
+		quads = append(quads, cayley.Quad(of.Id, parentLink, of.parentId, ""))
+	}
+
+	for i := 0; i < len(quads) && err == nil; i++ {
+		err = GlobalFs().Graph.AddQuad(quads[i])
+		if err != nil && err.Error() == "quad exists" {
+			err = nil
+		}
+	}
+
+	return
 }
 
 func (of *OFile) Exists() bool {
@@ -177,21 +189,19 @@ func (of *OFile) delete() (err error) {
 		return errors.New("Can't delete file with children, must delete children first")
 	}
 
-	quads := make([]quad.Quad, 3)
-	quads[0] = cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), "")
-	quads[1] = cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), "")
-	quads[2] = cayley.Quad(of.Id, nameLink, of.Name(), "")
+	transaction := cayley.NewTransaction()
+	transaction.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
+	transaction.RemoveQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), ""))
+	transaction.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
 
 	if of.Parent() != nil {
-		quads = append(quads, cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
+		transaction.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
 	}
 	if of.Size() > 0 {
-		quads = append(quads, cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
+		transaction.RemoveQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
 	}
 
-	for i := 0; i < len(quads) && err == nil; i++ {
-		err = GlobalFs().Graph.QuadWriter.RemoveQuad(quads[i])
-	}
+	err = GlobalFs().Graph.ApplyTransaction(transaction)
 
 	if err == nil {
 		of.mode = 1

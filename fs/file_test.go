@@ -160,22 +160,48 @@ func TestParent(t *testing.T) {
 func TestWrite(t *testing.T) {
 	testInit()
 
+	mTime := time.Now()
+
 	file := newFile("root")
-	file.mode = os.ModeDir
 	file.size = 1024
+	file.mode = os.ModeSticky
+	file.mTime = mTime
 
 	err := file.Write()
 	assert.Nil(t, err)
 
-	it := cayley.StartPath(GlobalFs().Graph, file.Id).Out(parentLink).
-		Or(cayley.StartPath(GlobalFs().Graph, file.Id).Out(nameLink)).
-		Or(cayley.StartPath(GlobalFs().Graph, file.Id).Out(sizeLink)).
-		Or(cayley.StartPath(GlobalFs().Graph, file.Id).Out(modeLink)).
-		Or(cayley.StartPath(GlobalFs().Graph, file.Id).Out(mTimeLink)).BuildIterator()
-
-	for cayley.RawNext(it) {
-		assert.NotEmpty(t, GlobalFs().Graph.NameOf(it.Result()))
+	g := GlobalFs().Graph
+	assertProperty := func(expected string, actual cayley.Iterator) {
+		assert.True(t, cayley.RawNext(actual))
+		assert.Equal(t, expected, g.NameOf(actual.Result()))
 	}
+
+	it := cayley.StartPath(g, file.Id).Out(nameLink).BuildIterator()
+	assertProperty("root", it)
+
+	it = cayley.StartPath(g, file.Id).Out(sizeLink).BuildIterator()
+	assertProperty("1024", it)
+
+	it = cayley.StartPath(g, file.Id).Out(mTimeLink).BuildIterator()
+	assertProperty(fmt.Sprint(mTime.Unix()), it)
+
+	it = cayley.StartPath(g, file.Id).Out(modeLink).BuildIterator()
+	assertProperty(fmt.Sprint(int(os.ModeSticky)), it)
+}
+
+func TestWrite_overwriteExistingProperty(t *testing.T) {
+	testInit()
+
+	file := newFile("root")
+	file.mode = os.ModeDir
+
+	err := file.Write()
+	assert.Nil(t, err)
+
+	file.name = "root2"
+	err = file.Write()
+	assert.Nil(t, err)
+	assert.Equal(t, "root2", file.Name())
 }
 
 func TestWrite_returnsErrorWhenFileHasNoName(t *testing.T) {
