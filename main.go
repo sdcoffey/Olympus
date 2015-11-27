@@ -32,6 +32,7 @@ func main() {
 	v1Router.HandleFunc("/rm/{fileId}", api.RmFile).Methods("DELETE")
 	v1Router.HandleFunc("/mkdir/{parentId}/{name}", api.MkDir).Methods("POST")
 	v1Router.HandleFunc("/cr/{parentId}/{name}", api.Cr).Methods("POST")
+	v1Router.HandleFunc("/update/{fileId}", api.Update).Methods("PATCH")
 
 	http.ListenAndServe(":3000", r)
 }

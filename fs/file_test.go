@@ -104,16 +104,14 @@ func TestModTime(t *testing.T) {
 func TestChildren(t *testing.T) {
 	testInit()
 
-	rootNode := newFile("root")
-	rootNode.mode = os.ModeDir
-	rootNode.Write()
+	rootNode, _ := RootNode()
 
 	childNode1 := newFile("child1")
 	childNode1.parentId = rootNode.Id
 	childNode1.Write()
 
 	childNode2 := newFile("child2")
-	childNode2.mode = os.ModeDir
+	childNode2.mode |= os.ModeDir
 	childNode2.parentId = rootNode.Id
 	childNode2.Write()
 
@@ -193,7 +191,7 @@ func TestWrite_overwriteExistingProperty(t *testing.T) {
 	testInit()
 
 	file := newFile("root")
-	file.mode = os.ModeDir
+	file.mode |= os.ModeDir
 
 	err := file.Write()
 	assert.Nil(t, err)
@@ -212,38 +210,17 @@ func TestWrite_returnsErrorWhenFileHasNoName(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestWrite_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
-	testInit()
-
-	file := newFile("root")
-	file.mode = os.ModeDir
-	file.Write()
-
-	child1 := newFile("child")
-	child1.parentId = file.Id
-	child2 := newFile("child")
-	child2.parentId = file.Id
-
-	err := child1.Write()
-	assert.Nil(t, err)
-	err = child2.Write()
-	assert.NotNil(t, err)
-}
-
 func TestDelete(t *testing.T) {
 	testInit()
 
-	file := newFile("root")
-	file.mode = os.ModeDir
-	file.size = 1024
-	file.Write()
+	file, _ := RootNode()
 
 	err := file.delete()
 	assert.Nil(t, err)
 
 	assert.Zero(t, file.Name())
 	assert.Zero(t, file.Size())
-	assert.EqualValues(t, 1, file.Mode())
+	assert.EqualValues(t, 0, file.Mode())
 	assert.Zero(t, file.ModTime())
 
 	fetchedFile := FileWithId(file.Id)
