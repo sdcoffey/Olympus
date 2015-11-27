@@ -109,3 +109,17 @@ func TestMv_throwsWhenMovingRootNode(t *testing.T) {
 	err := Mv(root, "root", "abcd-new-parent")
 	assert.NotNil(t, err)
 }
+
+func TestMv_throwsWhenMovingNodeInsideItself(t *testing.T) {
+	testInit()
+
+	root := newFile("root")
+	root.mode = os.ModeDir
+	root.Write()
+
+	file, err := MkDir(root.Id, "child")
+	err = Mv(file, file.Name(), file.Id)
+
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "move file inside itself")
+}

@@ -70,11 +70,11 @@ func olympusHome() (path string, err error) {
 		path = filepath.Join(currentUser.HomeDir, ".olympus")
 		return
 	}
-
-	return
 }
 
 func exists(filename string) bool {
-	_, err := os.Open(filename)
-	return err == nil && !os.IsNotExist(err)
+	if _, err := os.Open(filename); err != nil {
+		return !os.IsNotExist(err)
+	}
+	return true
 }
