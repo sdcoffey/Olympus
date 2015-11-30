@@ -7,6 +7,7 @@ import (
 )
 
 var globalFs *Fs
+var rootNode *OFile
 
 type Fs struct {
 	Graph *cayley.Handle
@@ -19,16 +20,32 @@ type GraphWriter interface {
 
 func Init(graph *cayley.Handle) {
 	globalFs = &Fs{graph}
+	var err error
+	rootNode, err = RootNode()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func GlobalFs() *Fs {
 	return globalFs
 }
 
+func RootNode() (root *OFile, err error) {
+	if root = FileWithId("rootNode"); !root.Exists() {
+		root = newFile("root")
+		root.Id = "rootNode"
+		root.mode = os.ModeDir
+		err = root.Write()
+	}
+
+	return
+}
+
 func addChild(parentId string, child *OFile) (err error) {
 	parent := FileWithId(parentId)
 	if !parent.IsDir() {
-		err = errors.New("Can't add file to a non-directory")
+		err = errors.New("Cannot add file to a non-directory")
 		return
 	}
 
@@ -37,6 +54,10 @@ func addChild(parentId string, child *OFile) (err error) {
 }
 
 func Rm(of *OFile) (err error) {
+	if of.Id == rootNode.Id && of.Parent() == nil {
+		return errors.New("Cannot delete root node")
+	}
+
 	children := of.Children()
 	if len(children) > 0 {
 		for i := 0; i < len(children) && err == nil; i++ {
