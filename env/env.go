@@ -29,7 +29,7 @@ func InitializeEnvironment() (err error) {
 		err = os.Mkdir(dirpath, 0777)
 	}
 
-	if !exists(home) {
+	if !Exists(home) {
 		mkdir(home)
 		mkdir(filepath.Join(home, string(DataPath)))
 		mkdir(filepath.Join(home, string(LogPath)))
@@ -72,8 +72,8 @@ func olympusHome() (path string, err error) {
 	}
 }
 
-func exists(filename string) bool {
-	if _, err := os.Open(filename); err != nil {
+func Exists(filename string) bool {
+	if _, err := os.Stat(filename); err != nil {
 		return !os.IsNotExist(err)
 	}
 	return true
