@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	code := m.Run()
+	os.Clearenv()
+	os.Exit(code)
+}
+
 func TestExists_returnsTrueForExistingFile(t *testing.T) {
 	file, _ := os.Create("test")
 	defer os.Remove(file.Name())

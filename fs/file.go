@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/cayley"
-	"github.com/google/cayley/quad"
+	"github.com/google/cayley/graph"
 	"os"
 	"strconv"
 	"time"
@@ -25,7 +25,9 @@ type NTree interface {
 }
 
 type OFile struct {
-	Id       string
+	Id    string
+	cache map[string]string
+
 	name     string
 	parentId string
 	size     int64
@@ -34,11 +36,11 @@ type OFile struct {
 }
 
 func newFile(filename string) *OFile {
-	return &OFile{Id: uuid.NewUUID().String(), mTime: time.Now(), mode: 1, name: filename}
+	return &OFile{Id: uuid.NewUUID().String(), mode: 700, mTime: time.Now(), name: filename, cache: make(map[string]string)}
 }
 
 func FileWithId(id string) *OFile {
-	return &OFile{Id: id, mode: 1}
+	return &OFile{Id: id, cache: make(map[string]string)}
 }
 
 func FileWithName(parentId, name string) *OFile {
@@ -54,58 +56,63 @@ func FileWithName(parentId, name string) *OFile {
 }
 
 // interface FileInfo
-func (of *OFile) Name() string {
-	if of.name == "" {
-		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(nameLink).BuildIterator()
-		if cayley.RawNext(it) {
-			of.name = GlobalFs().Graph.NameOf(it.Result())
-		} else {
-			of.name = ""
+func (of *OFile) Name() (name string) {
+	var ok bool
+	if name, ok = of.cache[nameLink]; !ok {
+		if name = of.graphValue(nameLink); name != "" {
+			of.cache[nameLink] = name
 		}
 	}
 
-	return of.name
+	return name
 }
 
-func (of *OFile) Size() int64 {
-	if of.size == 0 {
-		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(sizeLink).BuildIterator()
-		if cayley.RawNext(it) {
-			of.size, _ = strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64)
-		} else {
-			of.size = 0
+func (of *OFile) Size() (size int64) {
+	var sizeString string
+	var ok bool
+	if sizeString, ok = of.cache[sizeLink]; !ok {
+		if sizeString = of.graphValue(sizeLink); sizeString != "" {
+			of.cache[sizeLink] = sizeString
 		}
 	}
 
-	return of.size
+	var err error
+	if size, err = strconv.ParseInt(sizeString, 10, 64); err != nil {
+		return 0
+	}
+	return
 }
 
 func (of *OFile) Mode() os.FileMode {
-	if of.mode > 0 && of.mode < os.ModeSticky {
-		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(modeLink).BuildIterator()
-		if cayley.RawNext(it) {
-			mode, _ := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64)
-			of.mode = os.FileMode(mode)
-		} else {
-			of.mode = 1
+	var modeString string
+	var ok bool
+	if modeString, ok = of.cache[modeLink]; !ok {
+		if modeString = of.graphValue(modeLink); modeString != "" {
+			of.cache[modeLink] = modeString
 		}
 	}
 
-	return of.mode
+	if mode, err := strconv.ParseInt(modeString, 10, 64); err != nil {
+		return 0
+	} else {
+		return os.FileMode(mode)
+	}
 }
 
 func (of *OFile) ModTime() time.Time {
-	if of.mTime.IsZero() {
-		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(mTimeLink).BuildIterator()
-		if cayley.RawNext(it) {
-			unixTime, _ := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64)
-			of.mTime = time.Unix(unixTime, 0)
-		} else {
-			of.mTime = time.Time{}
+	var timeString string
+	var ok bool
+	if timeString, ok = of.cache[mTimeLink]; !ok {
+		if timeString = of.graphValue(mTimeLink); timeString != "" {
+			of.cache[mTimeLink] = timeString
 		}
 	}
 
-	return of.mTime
+	if unixTime, err := strconv.ParseInt(timeString, 10, 64); err != nil {
+		return time.Time{}
+	} else {
+		return time.Unix(unixTime, 0)
+	}
 }
 
 func (of *OFile) IsDir() bool {
@@ -118,22 +125,17 @@ func (of *OFile) Sys() interface{} {
 
 // interface NTree
 func (of *OFile) Parent() *OFile {
-	if of.parentId == "" {
-		it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(parentLink).BuildIterator()
-		if cayley.RawNext(it) {
-			id := GlobalFs().Graph.NameOf(it.Result())
-			if id != "" {
-				of.parentId = id
-				return FileWithId(id)
-			}
+	if parentId, ok := of.cache[parentLink]; !ok {
+		parentId = of.graphValue(parentLink)
+		if parentId != "" {
+			of.cache[parentLink] = parentId
+			return FileWithId(parentId)
 		} else {
-			of.parentId = ""
+			return nil
 		}
-	} else {
-		return FileWithId(of.parentId)
 	}
 
-	return nil
+	return FileWithId(of.cache[parentLink])
 }
 
 func (of *OFile) Children() []*OFile {
@@ -154,27 +156,52 @@ func (of *OFile) Children() []*OFile {
 
 // interface GraphWriter
 func (of *OFile) Write() (err error) {
-	if of.Parent() != nil && FileWithName(of.Parent().Id, of.name) != nil {
-		return errors.New(fmt.Sprintf("File with name %s already exists in %s", of.Name(), of.Parent().Name()))
-	} else if of.name == "" {
+	if of.name == "" && of.Name() == "" {
 		return errors.New("cannot add nameless file")
 	}
 
-	quads := make([]quad.Quad, 4, 5)
-	quads[0] = cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.size), "")
-	quads[1] = cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.mode)), "")
-	quads[2] = cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.mTime.Unix()), "")
-	quads[3] = cayley.Quad(of.Id, nameLink, of.name, "")
+	staleQuads := graph.NewTransaction()
+	newQuads := graph.NewTransaction()
 
-	if of.parentId != "" {
-		quads = append(quads, cayley.Quad(of.Id, parentLink, of.parentId, ""))
+	if of.name != of.Name() {
+		if of.Name() != "" {
+			staleQuads.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
+		}
+		newQuads.AddQuad(cayley.Quad(of.Id, nameLink, of.name, ""))
+	}
+	if of.mode != of.Mode() {
+		if of.Mode() > 0 {
+			staleQuads.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
+		}
+		newQuads.AddQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.mode)), ""))
+	}
+	if of.size != of.Size() {
+		if of.Size() > 0 {
+			staleQuads.RemoveQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
+		}
+		newQuads.AddQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.size), ""))
+	}
+	if !of.mTime.Equal(of.ModTime()) {
+		if !of.ModTime().IsZero() {
+			staleQuads.RemoveQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), ""))
+		}
+		newQuads.AddQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.mTime.Unix()), ""))
+	}
+	if of.parentId != "" && of.Parent() == nil || of.Parent() != nil && of.parentId != of.Parent().Id {
+		if of.Parent() != nil {
+			staleQuads.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
+		}
+		newQuads.AddQuad(cayley.Quad(of.Id, parentLink, of.parentId, ""))
 	}
 
-	for i := 0; i < len(quads) && err == nil; i++ {
-		err = GlobalFs().Graph.AddQuad(quads[i])
-		if err != nil && err.Error() == "quad exists" {
-			err = nil
-		}
+	if err = GlobalFs().Graph.ApplyTransaction(staleQuads); err != nil {
+		return
+	} else if err = GlobalFs().Graph.ApplyTransaction(newQuads); err != nil {
+		return
+	}
+
+	for _, delta := range staleQuads.Deltas {
+		delete(of.cache, delta.Quad.Predicate)
 	}
 
 	return
@@ -184,16 +211,30 @@ func (of *OFile) Exists() bool {
 	return of.Name() != ""
 }
 
+func (of *OFile) graphValue(key string) (value string) {
+	it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(key).BuildIterator()
+	if cayley.RawNext(it) {
+		value = GlobalFs().Graph.NameOf(it.Result())
+	}
+
+	return
+}
+
 func (of *OFile) delete() (err error) {
 	if len(of.Children()) > 0 {
 		return errors.New("Can't delete file with children, must delete children first")
 	}
 
 	transaction := cayley.NewTransaction()
-	transaction.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
-	transaction.RemoveQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), ""))
-	transaction.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
-
+	if of.Mode() != 0 {
+		transaction.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
+	}
+	if !of.ModTime().IsZero() {
+		transaction.RemoveQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), ""))
+	}
+	if of.Name() != "" {
+		transaction.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
+	}
 	if of.Parent() != nil {
 		transaction.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
 	}
@@ -210,6 +251,7 @@ func (of *OFile) delete() (err error) {
 		of.name = ""
 		of.parentId = ""
 		of.Id = ""
+		of.cache = make(map[string]string)
 	}
 
 	return

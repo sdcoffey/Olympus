@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"github.com/google/cayley"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -9,15 +10,14 @@ import (
 func TestMkDir(t *testing.T) {
 	testInit()
 
-	rootNode := newFile("root")
-	rootNode.mode = os.ModeDir
-	rootNode.Write()
+	root, _ := RootNode()
 
-	child, err := MkDir(rootNode.Id, "child")
+	child, err := MkDir(root.Id, "child")
 	assert.Nil(t, err)
+	assert.NotEmpty(t, child.Id)
 	assert.NotNil(t, child)
-	assert.Equal(t, rootNode.Id, child.Parent().Id)
-	assert.EqualValues(t, 1, len(rootNode.Children()))
+	assert.Equal(t, root.Id, child.Parent().Id)
+	assert.EqualValues(t, 1, len(root.Children()))
 }
 
 func TestMkDir_returnsErrorWhenParentNotDir(t *testing.T) {
@@ -31,12 +31,34 @@ func TestMkDir_returnsErrorWhenParentNotDir(t *testing.T) {
 	assert.Nil(t, child)
 }
 
+func TestRootNode_CreatesRootNode(t *testing.T) {
+	testInit()
+
+	root, err := RootNode()
+
+	assert.Nil(t, err)
+	assert.NotNil(t, root)
+	assert.Equal(t, "rootNode", root.Id)
+	assert.EqualValues(t, 700|os.ModeDir, root.Mode())
+
+	it := cayley.StartPath(GlobalFs().Graph, "rootNode").Out(nameLink).BuildIterator()
+	assert.True(t, cayley.RawNext(it))
+	assert.Equal(t, "root", GlobalFs().Graph.NameOf(it.Result()))
+}
+
+func TestRm_throwsWhenDeletingRootNode(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	err := Rm(root)
+	assert.NotNil(t, err)
+}
+
 func TestRm_deletesAllChildNodes(t *testing.T) {
 	testInit()
 
-	root := newFile("root")
-	root.mode = os.ModeDir
-	root.Write()
+	root, _ := RootNode()
 
 	child, _ := MkDir(root.Id, "child")
 	child2, _ := MkDir(root.Id, "child2")
@@ -63,9 +85,7 @@ func TestRm_deletesAllChildNodes(t *testing.T) {
 func TestMv_movesNodeSuccessfully(t *testing.T) {
 	testInit()
 
-	root := newFile("root")
-	root.mode = os.ModeDir
-	root.Write()
+	root, _ := RootNode()
 
 	child1, _ := MkDir(root.Id, "child1")
 	child2, _ := MkDir(root.Id, "child2")
@@ -86,9 +106,7 @@ func TestMv_movesNodeSuccessfully(t *testing.T) {
 func TestMv_renamesNodeSuccessfully(t *testing.T) {
 	testInit()
 
-	root := newFile("root")
-	root.mode = os.ModeDir
-	root.Write()
+	root, _ := RootNode()
 
 	child, _ := MkDir(root.Id, "child")
 	assert.Equal(t, "child", child.Name())
@@ -102,9 +120,7 @@ func TestMv_renamesNodeSuccessfully(t *testing.T) {
 func TestMv_throwsWhenMovingRootNode(t *testing.T) {
 	testInit()
 
-	root := newFile("root")
-	root.mode = os.ModeDir
-	root.Write()
+	root, _ := RootNode()
 
 	err := Mv(root, "root", "abcd-new-parent")
 	assert.NotNil(t, err)
@@ -113,13 +129,67 @@ func TestMv_throwsWhenMovingRootNode(t *testing.T) {
 func TestMv_throwsWhenMovingNodeInsideItself(t *testing.T) {
 	testInit()
 
-	root := newFile("root")
-	root.mode = os.ModeDir
-	root.Write()
+	root, _ := RootNode()
 
 	file, err := MkDir(root.Id, "child")
 	err = Mv(file, file.Name(), file.Id)
 
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "move file inside itself")
+}
+
+func TestChmod_chmodsSuccessfully(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	child := newFile("child")
+	addChild(root.Id, child)
+
+	err := Chmod(child, os.FileMode(777))
+	assert.Nil(t, err)
+	assert.EqualValues(t, 777, child.Mode())
+}
+
+func TestChmod_throwsWhenChangingDirToFile(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	child, _ := MkDir(root.Id, "child")
+	err := Chmod(child, 1)
+	assert.NotNil(t, err)
+}
+
+func TestChmod_throwWhenChangingFileToDir(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+
+	child := newFile("file")
+	addChild(root.Id, child)
+
+	err := Chmod(child, os.ModeDir)
+	assert.NotNil(t, err)
+}
+
+func TestAddChild_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
+	testInit()
+
+	file, _ := RootNode()
+	child1 := newFile("child")
+	err := addChild(file.Id, child1)
+	assert.Nil(t, err)
+
+	child2 := newFile("child")
+	err = addChild(file.Id, child2)
+	assert.NotNil(t, err)
+}
+
+func TestAddChild_throwsWhenParentDoesNotExist(t *testing.T) {
+	testInit()
+
+	orphan := newFile("file")
+	err := addChild("not-a-file", orphan)
+	assert.NotNil(t, err)
 }
