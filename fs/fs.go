@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/cayley"
 	"os"
+	"time"
 )
 
 var globalFs *Fs
@@ -15,7 +16,7 @@ type Fs struct {
 }
 
 type GraphWriter interface {
-	Write() error
+	Save() error
 	Delete() error
 }
 
@@ -37,7 +38,7 @@ func RootNode() (root *OFile, err error) {
 		root = newFile("root")
 		root.Id = "rootNode"
 		root.mode |= os.ModeDir
-		err = root.Write()
+		err = root.Save()
 	}
 
 	return
@@ -54,7 +55,7 @@ func addChild(parentId string, child *OFile) (err error) {
 	}
 
 	child.parentId = parent.Id
-	return child.Write()
+	return child.Save()
 }
 
 func Rm(of *OFile) (err error) {
@@ -104,5 +105,23 @@ func Chmod(of *OFile, newMode os.FileMode) (err error) {
 	}
 
 	of.mode = newMode
-	return of.Write()
+	return of.Save()
+}
+
+func MkFile(name, parentId string, size int64, mTime time.Time) (of *OFile, err error) {
+	of = newFile(name)
+	of.size = size
+	of.mTime = mTime
+
+	if err = addChild(parentId, of); err != nil {
+		of = nil
+		return
+	}
+
+	return
+}
+
+func Touch(file *OFile, mTime time.Time) (err error) {
+	file.mTime = mTime
+	return file.Save()
 }

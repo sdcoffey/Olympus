@@ -3,6 +3,7 @@ package env
 import (
 	"github.com/stretchr/testify/assert"
 	"os"
+	"os/user"
 	"path/filepath"
 	"testing"
 )
@@ -44,7 +45,8 @@ func TestOlympusHome_returnsDefaultPathWhenEnvNotSet(t *testing.T) {
 	os.Clearenv()
 	oPath, err := olympusHome()
 	assert.Nil(t, err)
-	assert.Equal(t, "/Users/scoffey/.olympus", oPath)
+	user, _ := user.Current()
+	assert.Equal(t, user.HomeDir+"/.olympus", oPath)
 }
 
 func TestInitializeEnvironment_createsCorrectDirctories(t *testing.T) {

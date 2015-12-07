@@ -24,7 +24,7 @@ func TestMkDir_returnsErrorWhenParentNotDir(t *testing.T) {
 	testInit()
 
 	rootNode := newFile("root")
-	rootNode.Write()
+	rootNode.Save()
 
 	child, err := MkDir(rootNode.Id, "child")
 	assert.NotNil(t, err)

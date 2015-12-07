@@ -17,6 +17,7 @@ const (
 	nameLink   = "isNamed"
 	modeLink   = "modeLink"
 	mTimeLink  = "hasMTime"
+	blockLink  = "hasBlock"
 )
 
 type NTree interface {
@@ -154,8 +155,34 @@ func (of *OFile) Children() []*OFile {
 	return children
 }
 
+func (of *OFile) Blocks() []*OFileBlock {
+	if of.IsDir() {
+		return make([]*OFileBlock, 0)
+	}
+
+	it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(blockLink).BuildIterator()
+	numBlocks := of.Size() / BLOCK_SIZE
+	if of.Size()%BLOCK_SIZE > 0 {
+		numBlocks++
+	}
+
+	blocks := make([]*OFileBlock, numBlocks)
+	idx := 0
+	for cayley.RawNext(it) {
+		blocks[idx] = BlockWithHash(GlobalFs().Graph.NameOf(it.Result()))
+		idx++
+	}
+
+	return blocks
+}
+
+func (of *OFile) AddBlock(block *OFileBlock, offset int64) error {
+	block.offset = offset
+	return block.Save()
+}
+
 // interface GraphWriter
-func (of *OFile) Write() (err error) {
+func (of *OFile) Save() (err error) {
 	if of.name == "" && of.Name() == "" {
 		return errors.New("cannot add nameless file")
 	}

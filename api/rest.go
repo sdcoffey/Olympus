@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/fs"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,6 +19,11 @@ type FileInfo struct {
 	Size  int64
 	MTime time.Time
 	Attr  int64
+}
+
+type BlockInfo struct {
+	Hash   string
+	Offset int64
 }
 
 type LsResponse struct {
@@ -139,24 +147,30 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	file := fs.FileWithName(parent.Id, paramFromRequest("name", req))
+
 	var fileInfo FileInfo
 	defer req.Body.Close()
-	err := json.Unmarshal(req.Body, &fileInfo)
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&fileInfo)
+
 	if err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
 	} else if file.Exists() {
-		same := true
-		if fileInfo.Size != file.Size() {
-			same = false
-		} else if fileInfo.MTime != file.ModTime() {
-			same = false
-		} else if fileInfo.Attr != file.Mode() {
-			same = false
+		writer.WriteHeader(400)
+		writer.Write([]byte(fmt.Sprint("File exists, call /v1/touch/", file.Id, " to update this object")))
+	} else {
+		if newFile, err := fs.MkFile(fileInfo.Name, parent.Id, fileInfo.Size, fileInfo.MTime); err != nil {
+			writer.WriteHeader(400)
+			writer.Write([]byte(err.Error()))
+		} else {
+			writer.WriteHeader(200)
+			fileInfo.Id = newFile.Id
+			body, _ := json.Marshal(&fileInfo)
+			writer.Write(body)
 		}
 	}
-
 }
 
 // v1/update/{fileId}
@@ -170,35 +184,105 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 
 	var fileInfo FileInfo
 	defer req.Body.Close()
-	err := json.Unmarshal(req.Body, &fileInfo)
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&fileInfo)
+
 	if err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
 	}
 
-	changes := make([]func() error, 0)
-	if fileInfo.Name != file.Name() {
-		changes = append(changes, func() error {
-			return fs.Mv(file, fileInfo.Name, file.Parent().Id)
-		})
+	changes := make([]func() error, 3)
+	changes[0] = func() error {
+		return fs.Mv(file, fileInfo.Name, file.Parent().Id)
 	}
-	if fileInfo.Attr != file.Mode() {
-		changes = append(changes, func() error {
-			return fs.Chmod(file, os.FileMode(fileInfo.Attr))
-		})
+	changes[1] = func() error {
+		return fs.Chmod(file, os.FileMode(fileInfo.Attr))
 	}
-	if !fileInfo.MTime.Equal(file.ModTime()) {
-		changes = append(changes, func() error {
-			fs
-		})
+	changes[2] = func() error {
+		return fs.Touch(file, fileInfo.MTime)
 	}
 
+	for i := 0; i < len(changes) && err == nil; i++ {
+		err = changes[i]()
+	}
+
+	if err != nil {
+		writer.WriteHeader(400)
+		writer.Write([]byte(err.Error()))
+	} else {
+		writer.WriteHeader(200)
+	}
+}
+
+// v1/hasBlocks/{fileId}?blocks=hash1,hash2
+// body {[]string} (hashes we don't have)
+func HasBlocks(writer http.ResponseWriter, req *http.Request) {
+	file := fs.FileWithId(paramFromRequest("fileId", req))
+	if !file.Exists() {
+		writeFileNotFoundError(file, writer)
+		return
+	}
+
+	questionableBlocks := req.URL.Query().Get("blocks")
+	questionableBlockList := strings.Split(questionableBlocks, ",")
+
+	neededBlocks := make([]string, 0, len(questionableBlockList))
+	for _, questionableBlock := range questionableBlockList {
+		block := fs.BlockWithHash(questionableBlock)
+		if !block.IsOnDisk() {
+			neededBlocks = append(neededBlocks, block.Hash)
+		}
+	}
+
+	body, _ := json.Marshal(&neededBlocks)
+	writer.WriteHeader(200)
+	writer.Write(body)
+}
+
+// v1/dd/{fileId}/{blockHash}/{offset}
+func WriteBlock(writer http.ResponseWriter, req *http.Request) {
+	file := fs.FileWithId(paramFromRequest("fileId", req))
+	if !file.Exists() {
+		writeFileNotFoundError(file, writer)
+		return
+	}
+
+	defer req.Body.Close()
+	var data []byte
+	var err error
+	if data, err = ioutil.ReadAll(req.Body); err != nil {
+		writeError(err, writer)
+		return
+	}
+
+	hash := paramFromRequest("blockHash", req)
+	if offset, err := strconv.ParseInt(paramFromRequest("offset", req), 10, 64); err != nil {
+		writeError(err, writer)
+	} else {
+		block := fs.BlockWithHash(hash)
+		if !block.IsOnDisk() {
+			if err = block.WriteData(data); err != nil {
+				writeError(err, writer)
+			}
+		}
+		if err = file.AddBlock(block, offset); err != nil {
+			writeError(err, writer)
+		} else {
+			writer.WriteHeader(200)
+		}
+	}
 }
 
 func paramFromRequest(key string, req *http.Request) string {
 	vars := mux.Vars(req)
 	return vars[key]
+}
+
+func writeError(err error, writer http.ResponseWriter) {
+	writer.WriteHeader(400)
+	writer.Write([]byte(err.Error()))
 }
 
 func writeFileNotFoundError(file *fs.OFile, writer http.ResponseWriter) {
