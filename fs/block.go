@@ -31,7 +31,7 @@ type OFileBlock struct {
 }
 
 func BlockWithHash(hash string) *OFileBlock {
-	return &OFileBlock{Hash: hash}
+	return &OFileBlock{Hash: hash, offset: -1}
 }
 
 func (ofp *OFileBlock) Read() ([]byte, error) {
@@ -46,12 +46,14 @@ func (ofp *OFileBlock) Read() ([]byte, error) {
 func (ofb *OFileBlock) Save() (err error) {
 	if ofb.offset%BLOCK_SIZE != 0 {
 		return errors.New(fmt.Sprint("Block has invalid offset ", ofb.offset))
+	} else if ofb.offset < 0 {
+		return errors.New("Cannot add block without offset")
 	}
 
 	staleQuads := cayley.NewTransaction()
 	newQuads := cayley.NewTransaction()
 
-	if ofb.offset != ofb.Offset() {
+	if ofb.Offset() > 0 && ofb.offset != ofb.Offset() {
 		staleQuads.RemoveQuad(cayley.Quad(ofb.Hash, offsetLink, fmt.Sprint(ofb.Offset()), ""))
 	}
 	newQuads.AddQuad(cayley.Quad(ofb.Hash, offsetLink, fmt.Sprint(ofb.offset), ""))
@@ -67,16 +69,18 @@ func (ofb *OFileBlock) Save() (err error) {
 
 // Assume that we're writing one block.
 // Clients will be responsible for parting files, but we'll validate the hash here
-func (ofb *OFileBlock) WriteData(bytes []byte) (err error) {
+func (ofb *OFileBlock) Write(bytes []byte) (n int, err error) {
 	if hash := blockHash(bytes); hash != ofb.Hash {
-		return errors.New(fmt.Sprint("Block with hash ", hash, " does not match this block's hash"))
-	} else if len(bytes) > MEGABYTE {
-		return errors.New(fmt.Sprint("Block exceeds max block size by ", (len(bytes) - BLOCK_SIZE)))
+		return 0, errors.New(fmt.Sprint("Block with hash ", hash, " does not match this block's hash"))
+	} else if len(bytes) > BLOCK_SIZE {
+		return 0, errors.New(fmt.Sprint("Block exceeds max block size by ", (len(bytes) - BLOCK_SIZE)))
 	}
 
 	filename := filepath.Join(env.EnvPath(env.DataPath), ofb.Hash)
 	if err = ioutil.WriteFile(filename, bytes, 700); err != nil {
 		return
+	} else {
+		n = len(bytes)
 	}
 
 	return
@@ -85,16 +89,12 @@ func (ofb *OFileBlock) WriteData(bytes []byte) (err error) {
 func (ofb *OFileBlock) Offset() int64 {
 	it := cayley.StartPath(GlobalFs().Graph, ofb.Hash).Out(offsetLink).BuildIterator()
 	if cayley.RawNext(it) {
-		if val, err := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64); err != nil {
+		if val, err := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64); err == nil {
 			return val
 		}
 	}
 
 	return -1
-}
-
-func (ofb *OFileBlock) Exists() bool {
-	return ofb.Offset() >= 0
 }
 
 func (ofb *OFileBlock) IsOnDisk() bool {

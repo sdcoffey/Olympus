@@ -161,30 +161,58 @@ func (of *OFile) Blocks() []*OFileBlock {
 	}
 
 	it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(blockLink).BuildIterator()
-	numBlocks := of.Size() / BLOCK_SIZE
+	maxBlocks := of.Size() / BLOCK_SIZE
 	if of.Size()%BLOCK_SIZE > 0 {
-		numBlocks++
+		maxBlocks++
 	}
 
-	blocks := make([]*OFileBlock, numBlocks)
-	idx := 0
+	blocks := make([]*OFileBlock, 0, maxBlocks)
 	for cayley.RawNext(it) {
-		blocks[idx] = BlockWithHash(GlobalFs().Graph.NameOf(it.Result()))
-		idx++
+		blocks = append(blocks, BlockWithHash(GlobalFs().Graph.NameOf(it.Result())))
 	}
 
 	return blocks
 }
 
+func (of *OFile) BlockWithOffset(offset int64) *OFileBlock {
+	if of.IsDir() {
+		return nil
+	}
+
+	filePath := cayley.StartPath(GlobalFs().Graph, of.Id).Out(blockLink)
+	filePath.And(cayley.StartPath(GlobalFs().Graph, fmt.Sprint(offset)).In(offsetLink))
+
+	it := filePath.BuildIterator()
+	if cayley.RawNext(it) {
+		return BlockWithHash(GlobalFs().Graph.NameOf(it.Result()))
+	}
+
+	return nil
+}
+
 func (of *OFile) AddBlock(block *OFileBlock, offset int64) error {
 	block.offset = offset
-	return block.Save()
+	if err := block.Save(); err == nil {
+		if err = GlobalFs().Graph.QuadWriter.AddQuad(cayley.Quad(of.Id, blockLink, block.Hash, "")); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+
+	return nil
+}
+
+func (of *OFile) RemoveBlock(block *OFileBlock) error {
+	return GlobalFs().Graph.RemoveQuad(cayley.Quad(of.Id, blockLink, block.Hash, ""))
 }
 
 // interface GraphWriter
 func (of *OFile) Save() (err error) {
 	if of.name == "" && of.Name() == "" {
 		return errors.New("cannot add nameless file")
+	} else if of.mTime.After(time.Now()) {
+		return errors.New("cannot set futuristic mTime")
 	}
 
 	staleQuads := graph.NewTransaction()

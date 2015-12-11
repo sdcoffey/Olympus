@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestMkDir(t *testing.T) {
@@ -191,5 +192,42 @@ func TestAddChild_throwsWhenParentDoesNotExist(t *testing.T) {
 
 	orphan := newFile("file")
 	err := addChild("not-a-file", orphan)
+	assert.NotNil(t, err)
+}
+
+func TestMkFile_mksFile(t *testing.T) {
+	testInit()
+
+	root, _ := RootNode()
+	now := time.Now()
+	child, err := MkFile("child", root.Id, 1024, now)
+	assert.Nil(t, err)
+	assert.NotNil(t, child)
+
+	assert.Equal(t, "child", child.Name())
+	assert.EqualValues(t, 1024, child.Size())
+	assert.EqualValues(t, now.Unix(), child.ModTime().Unix())
+	assert.False(t, child.IsDir())
+}
+
+func TestTouch_updatesMTime(t *testing.T) {
+	testInit()
+
+	then := time.Now().Add(-10 * time.Second)
+	child, _ := MkFile("child", rootNode.Id, 1024, then)
+
+	now := time.Now()
+	err := Touch(child, now)
+	assert.Nil(t, err)
+
+	assert.EqualValues(t, now.Unix(), child.ModTime().Unix())
+}
+
+func TestTouch_throwsIfDateInFuture(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
+
+	err := Touch(child, time.Now().Add(1*time.Microsecond))
 	assert.NotNil(t, err)
 }

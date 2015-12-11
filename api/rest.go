@@ -261,9 +261,13 @@ func WriteBlock(writer http.ResponseWriter, req *http.Request) {
 	if offset, err := strconv.ParseInt(paramFromRequest("offset", req), 10, 64); err != nil {
 		writeError(err, writer)
 	} else {
-		block := fs.BlockWithHash(hash)
+		block := file.BlockWithOffset(offset)
+		if block.Hash != hash {
+			file.RemoveBlock(block)
+			block = fs.BlockWithHash(hash)
+		}
 		if !block.IsOnDisk() {
-			if err = block.WriteData(data); err != nil {
+			if _, err = block.Write(data); err != nil {
 				writeError(err, writer)
 			}
 		}
