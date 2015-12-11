@@ -242,6 +242,61 @@ func TestDelete_returnsErrorWhenNodeHasChildren(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
+func TestAddBlock_addsBlock(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
+	block := BlockWithHash("abcd")
+	err := child.AddBlock(block, 0)
+	assert.Nil(t, err)
+
+	blocks := child.Blocks()
+	assert.Len(t, blocks, 1)
+	assert.Equal(t, block.Hash, blocks[0].Hash)
+	assert.EqualValues(t, 0, blocks[0].Offset())
+}
+
+func TestRemoveBlock_removesBlock(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
+	block := BlockWithHash("abcd")
+	err := child.AddBlock(block, 0)
+	assert.Nil(t, err)
+
+	err = child.RemoveBlock(block)
+	assert.Nil(t, err)
+	assert.Len(t, child.Blocks(), 0)
+}
+
+func TestBlockWithOffset_findsCorrectBlock(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, MEGABYTE*2, time.Now())
+	block := BlockWithHash("abcd")
+	err := child.AddBlock(block, 0)
+	assert.Nil(t, err)
+
+	block2 := BlockWithHash("efgh")
+	err = child.AddBlock(block2, MEGABYTE)
+	assert.Nil(t, err)
+
+	foundBlock := child.BlockWithOffset(0)
+	assert.NotNil(t, foundBlock)
+	assert.EqualValues(t, 0, foundBlock.Offset())
+
+	foundBlock2 := child.BlockWithOffset(MEGABYTE)
+	assert.NotNil(t, foundBlock2)
+	assert.EqualValues(t, MEGABYTE, foundBlock2.Offset())
+}
+
+func TestBlock_returnsEmptySliceForDir(t *testing.T) {
+	testInit()
+
+	blocks := rootNode.Blocks()
+	assert.EqualValues(t, 0, len(blocks))
+}
+
 func BenchmarkWrite(b *testing.B) {
 	testInit()
 	var lastId string
