@@ -13,7 +13,7 @@ func TestMkDir(t *testing.T) {
 
 	root, _ := RootNode()
 
-	child, err := MkDir(root.Id, "child")
+	child, err := root.MkDir("child")
 	assert.Nil(t, err)
 	assert.NotEmpty(t, child.Id)
 	assert.NotNil(t, child)
@@ -27,7 +27,7 @@ func TestMkDir_returnsErrorWhenParentNotDir(t *testing.T) {
 	rootNode := newFile("root")
 	rootNode.Save()
 
-	child, err := MkDir(rootNode.Id, "child")
+	child, err := rootNode.MkDir("child")
 	assert.NotNil(t, err)
 	assert.Nil(t, child)
 }
@@ -61,9 +61,9 @@ func TestRm_deletesAllChildNodes(t *testing.T) {
 
 	root, _ := RootNode()
 
-	child, _ := MkDir(root.Id, "child")
-	child2, _ := MkDir(root.Id, "child2")
-	MkDir(child2.Id, "child3")
+	child, _ := root.MkDir("child")
+	child2, _ := root.MkDir("child2")
+	child2.MkDir("child3")
 
 	err := Rm(child2)
 	assert.Nil(t, err)
@@ -88,12 +88,12 @@ func TestMv_movesNodeSuccessfully(t *testing.T) {
 
 	root, _ := RootNode()
 
-	child1, _ := MkDir(root.Id, "child1")
-	child2, _ := MkDir(root.Id, "child2")
+	child1, _ := root.MkDir("child1")
+	child2, _ := root.MkDir("child2")
 
 	assert.EqualValues(t, 2, len(root.Children()))
 
-	err := Mv(child2, child2.Name(), child1.Id)
+	err := child2.Mv(child2.Name(), child1.Id)
 	assert.Nil(t, err)
 
 	assert.EqualValues(t, 1, len(root.Children()))
@@ -109,10 +109,10 @@ func TestMv_renamesNodeSuccessfully(t *testing.T) {
 
 	root, _ := RootNode()
 
-	child, _ := MkDir(root.Id, "child")
+	child, _ := root.MkDir("child")
 	assert.Equal(t, "child", child.Name())
 
-	err := Mv(child, "THE child", root.Id)
+	err := child.Mv("THE child", root.Id)
 	assert.Nil(t, err)
 	assert.Equal(t, "THE child", child.Name())
 	assert.Equal(t, root.Id, child.Parent().Id)
@@ -123,7 +123,7 @@ func TestMv_throwsWhenMovingRootNode(t *testing.T) {
 
 	root, _ := RootNode()
 
-	err := Mv(root, "root", "abcd-new-parent")
+	err := root.Mv("root", "abcd-new-parent")
 	assert.NotNil(t, err)
 }
 
@@ -132,8 +132,8 @@ func TestMv_throwsWhenMovingNodeInsideItself(t *testing.T) {
 
 	root, _ := RootNode()
 
-	file, err := MkDir(root.Id, "child")
-	err = Mv(file, file.Name(), file.Id)
+	file, err := root.MkDir("child")
+	err = file.Mv(file.Name(), file.Id)
 
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "move file inside itself")
@@ -145,9 +145,9 @@ func TestChmod_chmodsSuccessfully(t *testing.T) {
 	root, _ := RootNode()
 
 	child := newFile("child")
-	addChild(root.Id, child)
+	root.addChild(child)
 
-	err := Chmod(child, os.FileMode(777))
+	err := child.Chmod(os.FileMode(777))
 	assert.Nil(t, err)
 	assert.EqualValues(t, 777, child.Mode())
 }
@@ -157,8 +157,8 @@ func TestChmod_throwsWhenChangingDirToFile(t *testing.T) {
 
 	root, _ := RootNode()
 
-	child, _ := MkDir(root.Id, "child")
-	err := Chmod(child, 1)
+	child, _ := root.MkDir("child")
+	err := child.Chmod(1)
 	assert.NotNil(t, err)
 }
 
@@ -168,9 +168,9 @@ func TestChmod_throwWhenChangingFileToDir(t *testing.T) {
 	root, _ := RootNode()
 
 	child := newFile("file")
-	addChild(root.Id, child)
+	root.addChild(child)
 
-	err := Chmod(child, os.ModeDir)
+	err := child.Chmod(os.ModeDir)
 	assert.NotNil(t, err)
 }
 
@@ -179,11 +179,11 @@ func TestAddChild_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
 
 	file, _ := RootNode()
 	child1 := newFile("child")
-	err := addChild(file.Id, child1)
+	err := file.addChild(child1)
 	assert.Nil(t, err)
 
 	child2 := newFile("child")
-	err = addChild(file.Id, child2)
+	err = file.addChild(child2)
 	assert.NotNil(t, err)
 }
 
@@ -191,7 +191,8 @@ func TestAddChild_throwsWhenParentDoesNotExist(t *testing.T) {
 	testInit()
 
 	orphan := newFile("file")
-	err := addChild("not-a-file", orphan)
+	notFile := FileWithId("not-a-file")
+	err := notFile.addChild(orphan)
 	assert.NotNil(t, err)
 }
 
@@ -217,7 +218,7 @@ func TestTouch_updatesMTime(t *testing.T) {
 	child, _ := MkFile("child", rootNode.Id, 1024, then)
 
 	now := time.Now()
-	err := Touch(child, now)
+	err := child.Touch(now)
 	assert.Nil(t, err)
 
 	assert.EqualValues(t, now.Unix(), child.ModTime().Unix())
@@ -228,6 +229,6 @@ func TestTouch_throwsIfDateInFuture(t *testing.T) {
 
 	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
 
-	err := Touch(child, time.Now().Add(1*time.Microsecond))
+	err := child.Touch(time.Now().Add(1 * time.Microsecond))
 	assert.NotNil(t, err)
 }

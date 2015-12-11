@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 )
 
-var debug = true
+var debug = false
 
 func main() {
 	env.InitializeEnvironment()
@@ -43,10 +43,11 @@ func initDb() (err error) {
 	var handle *cayley.Handle
 	if !debug {
 		dbPath := filepath.Join(env.EnvPath(env.DbPath), "db.dat")
-		if err = graph.InitQuadStore("bolt", dbPath, nil); err != nil {
-			return
-		}
-		if handle, err = cayley.NewGraph("bolt", dbPath, nil); err != nil {
+		if !env.Exists(dbPath) {
+			if err = graph.InitQuadStore("bolt", dbPath, nil); err != nil {
+				return
+			}
+		} else if handle, err = cayley.NewGraph("bolt", dbPath, nil); err != nil {
 			return
 		}
 	} else {

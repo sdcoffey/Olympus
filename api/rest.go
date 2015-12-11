@@ -99,7 +99,7 @@ func MvFile(writer http.ResponseWriter, req *http.Request) {
 		newName = file.Name()
 	}
 
-	err := fs.Mv(file, newName, newParent.Id)
+	err := file.Mv(newName, newParent.Id)
 	if err != nil {
 		writer.WriteHeader(500)
 		writer.Write([]byte(err.Error()))
@@ -117,7 +117,7 @@ func MkDir(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	name := paramFromRequest("name", req)
-	newFolder, err := fs.MkDir(parent.Id, name)
+	newFolder, err := parent.MkDir(name)
 	if err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
@@ -157,7 +157,7 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
-	} else if file.Exists() {
+	} else if file != nil && file.Exists() {
 		writer.WriteHeader(400)
 		writer.Write([]byte(fmt.Sprint("File exists, call /v1/touch/", file.Id, " to update this object")))
 	} else {
@@ -195,14 +195,16 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 
 	changes := make([]func() error, 3)
 	changes[0] = func() error {
-		return fs.Mv(file, fileInfo.Name, file.Parent().Id)
+		return file.Mv(fileInfo.Name, file.Parent().Id)
 	}
 	changes[1] = func() error {
-		return fs.Chmod(file, os.FileMode(fileInfo.Attr))
+		return file.Chmod(os.FileMode(fileInfo.Attr))
 	}
 	changes[2] = func() error {
-		return fs.Touch(file, fileInfo.MTime)
+		return file.Touch(fileInfo.MTime)
 	}
+
+	//todo :resize
 
 	for i := 0; i < len(changes) && err == nil; i++ {
 		err = changes[i]()

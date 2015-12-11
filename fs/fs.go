@@ -44,17 +44,16 @@ func RootNode() (root *OFile, err error) {
 	return
 }
 
-func addChild(parentId string, child *OFile) (err error) {
-	parent := FileWithId(parentId)
-	if !parent.IsDir() {
+func (of *OFile) addChild(child *OFile) (err error) {
+	if !of.IsDir() {
 		return errors.New("Cannot add file to a non-directory")
-	} else if FileWithId(parentId).Exists() && FileWithName(parentId, child.name) != nil {
-		return errors.New(fmt.Sprintf("File with name %s already exists in %s", child.name, FileWithId(parentId).Name()))
-	} else if !FileWithId(parentId).Exists() {
-		return errors.New(fmt.Sprint("Parent ", parentId, " does not exist"))
+	} else if of.Exists() && FileWithName(of.Id, child.name) != nil {
+		return errors.New(fmt.Sprintf("File with name %s already exists in %s", child.name, of.Name()))
+	} else if !of.Exists() {
+		return errors.New(fmt.Sprint("Parent ", of.Id, " does not exist"))
 	}
 
-	child.parentId = parent.Id
+	child.parentId = of.Id
 	return child.Save()
 }
 
@@ -73,17 +72,17 @@ func Rm(of *OFile) (err error) {
 	return of.delete()
 }
 
-func MkDir(parentId string, name string) (f *OFile, err error) {
+func (of *OFile) MkDir(name string) (f *OFile, err error) {
 	child := newFile(name)
 	child.mode |= os.ModeDir
 
-	if err = addChild(parentId, child); err != nil {
+	if err = of.addChild(child); err != nil {
 		return
 	}
 	return child, err
 }
 
-func Mv(of *OFile, newName, newParentId string) (err error) {
+func (of *OFile) Mv(newName, newParentId string) (err error) {
 	if of.Parent() == nil {
 		return errors.New("Cannot move root node")
 	} else if newParentId == of.Id {
@@ -96,10 +95,11 @@ func Mv(of *OFile, newName, newParentId string) (err error) {
 		of.name = newName
 	}
 
-	return addChild(newParentId, of)
+	newParent := FileWithId(newParentId)
+	return newParent.addChild(of)
 }
 
-func Chmod(of *OFile, newMode os.FileMode) (err error) {
+func (of *OFile) Chmod(newMode os.FileMode) (err error) {
 	if of.IsDir() != (newMode&os.ModeDir > 0) {
 		return errors.New("Cannot merge file into folder")
 	}
@@ -113,7 +113,8 @@ func MkFile(name, parentId string, size int64, mTime time.Time) (of *OFile, err 
 	of.size = size
 	of.mTime = mTime
 
-	if err = addChild(parentId, of); err != nil {
+	parent := FileWithId(parentId)
+	if err = parent.addChild(of); err != nil {
 		of = nil
 		return
 	}
@@ -121,7 +122,7 @@ func MkFile(name, parentId string, size int64, mTime time.Time) (of *OFile, err 
 	return
 }
 
-func Touch(file *OFile, mTime time.Time) (err error) {
-	file.mTime = mTime
-	return file.Save()
+func (of *OFile) Touch(mTime time.Time) (err error) {
+	of.mTime = mTime
+	return of.Save()
 }
