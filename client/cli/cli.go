@@ -8,6 +8,7 @@ import (
 	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/peer"
 	"os"
 	"strings"
 )
@@ -27,12 +28,13 @@ func main() {
 	}
 
 	println("Searching for Olympus instances")
-	var olympusAddress string
 	var client apiclient.ApiClient
-	if olympusAddress = findOlympus(); olympusAddress == "" {
-		println("Could not find Olympus Instance on network")
+	if olympusAddress, err := peer.FindServer(); err != nil {
+		println("Could not find Olympus Instance on network: " + err.Error())
 		os.Exit(1)
 	} else {
+		olympusAddress = "http://" + olympusAddress + ":3000"
+		println("Found Olympus At: " + olympusAddress)
 		client = apiclient.ApiClient{Address: olympusAddress}
 	}
 
@@ -50,10 +52,6 @@ func main() {
 		}
 		print(">>> ")
 	}
-}
-
-func findOlympus() string {
-	return "http://localhost:3000"
 }
 
 func parseCommand(command []byte) (Command, error) {

@@ -1,0 +1,48 @@
+package peer
+
+import (
+	"fmt"
+	"github.com/sdcoffey/olympus/fs"
+	"net"
+	"time"
+)
+
+const (
+	address = "224.0.0.1:5353"
+	maxSize = fs.KILOBYTE
+)
+
+func FindServer() (net.IP, error) {
+	if addr, err := net.ResolveUDPAddr("udp4", address); err != nil {
+		return net.IPv4zero, err
+	} else if socket, err := net.ListenMulticastUDP("udp4", nil, addr); err != nil {
+		return net.IPv4zero, err
+	} else {
+		defer socket.Close()
+		for {
+			socket.SetReadBuffer(maxSize)
+			b := make([]byte, maxSize)
+			if _, src, err := socket.ReadFromUDP(b); err != nil {
+				return net.IPv4zero, err
+			} else {
+				return src.IP, nil
+			}
+		}
+	}
+}
+
+func ClientHeartbeat() {
+	if addr, err := net.ResolveUDPAddr("udp4", address); err != nil {
+		fmt.Println(err.Error())
+	} else if connection, err := net.DialUDP("udp4", nil, addr); err != nil {
+		fmt.Println(err.Error())
+	} else {
+		ticker := time.Tick(time.Second) // todo config
+		for {
+			<-ticker
+			if _, err := connection.Write([]byte("HELLO")); err != nil {
+				fmt.Println(err.Error())
+			}
+		}
+	}
+}

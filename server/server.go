@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/peer"
 	"github.com/sdcoffey/olympus/server/api"
 	"net/http"
 	"os"
@@ -24,6 +25,8 @@ func main() {
 	} else {
 		fs.RootNode()
 	}
+
+	go peer.ClientHeartbeat()
 
 	r := mux.NewRouter()
 	v1Router := r.PathPrefix("/v1").Subrouter()
