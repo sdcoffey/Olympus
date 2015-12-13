@@ -11,6 +11,8 @@ import (
 var globalFs *Fs
 var rootNode *OFile
 
+const RootNodeId = "rootNode"
+
 type Fs struct {
 	Graph *cayley.Handle
 }
@@ -34,9 +36,9 @@ func GlobalFs() *Fs {
 }
 
 func RootNode() (root *OFile, err error) {
-	if root = FileWithId("rootNode"); !root.Exists() {
+	if root = FileWithId(RootNodeId); !root.Exists() {
 		root = newFile("root")
-		root.Id = "rootNode"
+		root.Id = RootNodeId
 		root.mode |= os.ModeDir
 		err = root.Save()
 	}

@@ -1,7 +1,8 @@
 .DS_Store
 .idea
 *.iml
-olympus
+server
+cli
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a

@@ -1,7 +1,8 @@
 package api
 
 import (
-	"encoding/json"
+	"encoding/gob"
+	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/fs"
@@ -10,27 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
-
-type FileInfo struct {
-	Id    string
-	Name  string
-	Size  int64
-	MTime time.Time
-	Attr  int64
-}
-
-type BlockInfo struct {
-	Hash   string
-	Offset int64
-}
-
-type LsResponse struct {
-	Name     string
-	ParentId string
-	Children []FileInfo
-}
 
 // v1/ls/{parentId}
 func LsFiles(writer http.ResponseWriter, req *http.Request) {
@@ -40,28 +21,16 @@ func LsFiles(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	response := LsResponse{Name: file.Name(), ParentId: file.Id}
 	children := file.Children()
-	responseChildren := make([]FileInfo, len(children))
+	response := make([]fs.FileInfo, len(children))
 
 	for idx, child := range children {
-		responseChildren[idx] = FileInfo{
-			Id:    child.Id,
-			Name:  child.Name(),
-			Size:  child.Size(),
-			MTime: child.ModTime(),
-			Attr:  int64(child.Mode()),
-		}
-	}
-	response.Children = responseChildren
-	serialized, err := json.Marshal(&response)
-	if err != nil {
-		writer.WriteHeader(500)
-		return
+		response[idx] = child.FileInfo()
 	}
 
+	encoder := gob.NewEncoder(writer)
 	writer.WriteHeader(200)
-	writer.Write(serialized)
+	encoder.Encode(response)
 }
 
 // v1/rm/{fileId}
@@ -74,8 +43,7 @@ func RmFile(writer http.ResponseWriter, req *http.Request) {
 
 	err := fs.Rm(file)
 	if err != nil {
-		writer.WriteHeader(500)
-		writer.Write([]byte(err.Error()))
+		writeStatusErr(500, err, writer)
 	} else {
 		writer.WriteHeader(200)
 	}
@@ -101,8 +69,7 @@ func MvFile(writer http.ResponseWriter, req *http.Request) {
 
 	err := file.Mv(newName, newParent.Id)
 	if err != nil {
-		writer.WriteHeader(500)
-		writer.Write([]byte(err.Error()))
+		writeStatusErr(500, err, writer)
 	} else {
 		writer.WriteHeader(200)
 	}
@@ -119,21 +86,11 @@ func MkDir(writer http.ResponseWriter, req *http.Request) {
 	name := paramFromRequest("name", req)
 	newFolder, err := parent.MkDir(name)
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(err.Error()))
+		writeError(err, writer)
 	} else {
-		type response struct {
-			Id string
-		}
-
-		bytes, err := json.Marshal(&response{newFolder.Id})
-		if err != nil {
-			writer.WriteHeader(400)
-			writer.Write([]byte(err.Error()))
-		} else {
-			writer.WriteHeader(200)
-			writer.Write(bytes)
-		}
+		encoder := gob.NewEncoder(writer)
+		writer.WriteHeader(200)
+		encoder.Encode(newFolder.Id)
 	}
 }
 
@@ -148,9 +105,9 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 
 	file := fs.FileWithName(parent.Id, paramFromRequest("name", req))
 
-	var fileInfo FileInfo
+	var fileInfo fs.FileInfo
 	defer req.Body.Close()
-	decoder := json.NewDecoder(req.Body)
+	decoder := gob.NewDecoder(req.Body)
 	err := decoder.Decode(&fileInfo)
 
 	if err != nil {
@@ -158,17 +115,15 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 		writer.Write([]byte(err.Error()))
 		return
 	} else if file != nil && file.Exists() {
-		writer.WriteHeader(400)
-		writer.Write([]byte(fmt.Sprint("File exists, call /v1/touch/", file.Id, " to update this object")))
+		writeError(errors.New("File exists, call /v1/touch/"+file.Id+" to update this object"), writer)
 	} else {
 		if newFile, err := fs.MkFile(fileInfo.Name, parent.Id, fileInfo.Size, fileInfo.MTime); err != nil {
-			writer.WriteHeader(400)
-			writer.Write([]byte(err.Error()))
+			writeError(err, writer)
 		} else {
+			encoder := gob.NewEncoder(writer)
 			writer.WriteHeader(200)
 			fileInfo.Id = newFile.Id
-			body, _ := json.Marshal(&fileInfo)
-			writer.Write(body)
+			encoder.Encode(fileInfo)
 		}
 	}
 }
@@ -182,14 +137,13 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var fileInfo FileInfo
+	var fileInfo fs.FileInfo
 	defer req.Body.Close()
-	decoder := json.NewDecoder(req.Body)
+	decoder := gob.NewDecoder(req.Body)
 	err := decoder.Decode(&fileInfo)
 
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(err.Error()))
+		writeError(err, writer)
 		return
 	}
 
@@ -211,8 +165,7 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	if err != nil {
-		writer.WriteHeader(400)
-		writer.Write([]byte(err.Error()))
+		writeStatusErr(500, err, writer)
 	} else {
 		writer.WriteHeader(200)
 	}
@@ -238,9 +191,9 @@ func HasBlocks(writer http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	body, _ := json.Marshal(&neededBlocks)
 	writer.WriteHeader(200)
-	writer.Write(body)
+	encoder := gob.NewEncoder(writer)
+	encoder.Encode(&neededBlocks)
 }
 
 // v1/dd/{fileId}/{blockHash}/{offset}
@@ -286,12 +239,18 @@ func paramFromRequest(key string, req *http.Request) string {
 	return vars[key]
 }
 
+func writeStatusErr(statusCode int, err error, writer http.ResponseWriter) {
+	encoder := gob.NewEncoder(writer)
+	writer.WriteHeader(statusCode)
+	encoder.Encode(err.Error())
+}
+
 func writeError(err error, writer http.ResponseWriter) {
-	writer.WriteHeader(400)
-	writer.Write([]byte(err.Error()))
+	writeStatusErr(400, err, writer)
 }
 
 func writeFileNotFoundError(file *fs.OFile, writer http.ResponseWriter) {
+	encoder := gob.NewEncoder(writer)
 	writer.WriteHeader(400)
-	writer.Write([]byte(fmt.Sprintf("File with id: %s does not exist", file.Id)))
+	encoder.Encode(fmt.Sprintf("File with id: %s does not exist", file.Id))
 }

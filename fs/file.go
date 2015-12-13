@@ -40,6 +40,17 @@ func newFile(filename string) *OFile {
 	return &OFile{Id: uuid.NewUUID().String(), mode: 700, mTime: time.Now(), name: filename, cache: make(map[string]string)}
 }
 
+func FileWithFileInfo(info FileInfo) *OFile {
+	ofile := FileWithId(info.Id)
+	ofile.name = info.Name
+	ofile.parentId = info.ParentId
+	ofile.mode = os.FileMode(info.Attr)
+	ofile.size = info.Size
+	ofile.mTime = info.MTime
+
+	return ofile
+}
+
 func FileWithId(id string) *OFile {
 	return &OFile{Id: id, cache: make(map[string]string)}
 }
@@ -264,6 +275,20 @@ func (of *OFile) Save() (err error) {
 
 func (of *OFile) Exists() bool {
 	return of.Name() != ""
+}
+
+func (of *OFile) FileInfo() FileInfo {
+	info := FileInfo{}
+	info.Attr = int64(of.Mode())
+	info.Id = of.Id
+	info.MTime = of.ModTime()
+	info.Name = of.Name()
+	info.Size = of.Size()
+	if of.Parent() != nil {
+		info.ParentId = of.Parent().Id
+	}
+
+	return info
 }
 
 func (of *OFile) graphValue(key string) (value string) {

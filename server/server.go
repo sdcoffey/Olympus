@@ -5,9 +5,9 @@ import (
 	"github.com/google/cayley/graph"
 	_ "github.com/google/cayley/graph/bolt"
 	"github.com/gorilla/mux"
-	"github.com/sdcoffey/olympus/api"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/server/api"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -47,7 +47,8 @@ func initDb() (err error) {
 			if err = graph.InitQuadStore("bolt", dbPath, nil); err != nil {
 				return
 			}
-		} else if handle, err = cayley.NewGraph("bolt", dbPath, nil); err != nil {
+		}
+		if handle, err = cayley.NewGraph("bolt", dbPath, nil); err != nil {
 			return
 		}
 	} else {
