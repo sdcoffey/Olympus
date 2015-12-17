@@ -11,11 +11,10 @@ import (
 	"github.com/sdcoffey/olympus/peer"
 	"os"
 	"strings"
+	"flag"
 )
 
-type Command interface {
-	Execute(apiclient.ApiClient) (string, error)
-}
+type Command func([]string, apiclient.ApiClient) (string, error)
 
 var wd *fs.OFile
 
@@ -33,55 +32,50 @@ func main() {
 		println("Could not find Olympus Instance on network: " + err.Error())
 		os.Exit(1)
 	} else {
-		olympusAddress = "http://" + olympusAddress + ":3000"
-		println("Found Olympus At: " + olympusAddress)
-		client = apiclient.ApiClient{Address: olympusAddress}
+		resolvedPath := "http://" + olympusAddress.String() + ":3000"
+		println("Found Olympus At: " + olympusAddress.String())
+		client = apiclient.ApiClient{Address: resolvedPath}
 	}
 
-	print(">>> ")
+	print("O> ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		if cmd, err := parseCommand(scanner.Bytes()); err != nil {
-			println(err.Error())
-		} else {
-			if resp, err := cmd.Execute(client); err != nil {
-				println(err.Error())
-			} else if resp != "" {
-				println(resp)
+		stringCommand := strings.TrimSpace(string(scanner.Bytes()))
+		var args []string
+		if strings.Contains(stringCommand, " ") {
+			if commandComponents := strings.Split(stringCommand, " "); len(commandComponents) > 1 {
+				args = commandComponents[1:len(commandComponents)]
+				stringCommand = commandComponents[0]
 			}
 		}
-		print(">>> ")
+		if command := parseCommand(stringCommand); command != nil {
+			if result, err := command(args, client); err != nil {
+				println(fmt.Sprint("Error: ", err.Error()))
+			} else {
+				println(result)
+			}
+		} else {
+			println("Unrecognized command: " + stringCommand)
+		}
+		print("O> ")
 	}
 }
 
-func parseCommand(command []byte) (Command, error) {
+func parseCommand(command string) Command {
 	strCmd := strings.TrimSpace(string(command))
-	var args []string
-	if strings.Contains(strCmd, " ") {
-		if commandComponents := strings.Split(strCmd, " "); len(commandComponents) > 1 {
-			args = commandComponents[1:len(commandComponents)]
-			strCmd = commandComponents[0]
-		}
-	}
 
 	function := strings.ToLower(strCmd)
 	switch function {
 	case "ls":
-		return ls{args}, nil
+		return ls
 	case "mkdir":
-		if len(args) < 1 {
-			return nil, errors.New("Not enough arguments in call to mkdir")
-		}
-		return mkdir{args[0]}, nil
+		return mkdir
 	case "pwd":
-		return pwd{}, nil
+		return pwd
 	case "cd":
-		if len(args) < 1 {
-			return nil, errors.New("Not enough arguments in call to cd")
-		}
-		return cd{args[0]}, nil
+		return cd
 	default:
-		return nil, errors.New(fmt.Sprint("Unrecognized command: ", function))
+		return nil
 	}
 }
 
@@ -93,11 +87,7 @@ func initDb() *cayley.Handle {
 	return graph
 }
 
-type ls struct {
-	args []string
-}
-
-func (cmd ls) Execute(client apiclient.ApiClient) (string, error) {
+func ls(args []string, client apiclient.ApiClient) (string, error) {
 	// todo lh
 	if fis, err := client.Ls(wd.Id); err != nil {
 		return "", err
@@ -114,43 +104,59 @@ func (cmd ls) Execute(client apiclient.ApiClient) (string, error) {
 	}
 }
 
-type mkdir struct {
-	name string
-}
+func mkdir(args []string, client apiclient.ApiClient) (string, error) {
+	var dirsToCreate []string
+	if len(args) == 0 {
+		return "", errors.New("Not enough arguments in call to mkdir")
+	} else if len(args) > 1 || strings.Contains(args[0], "/"){
+		parser := flag.NewFlagSet("ls", flag.ContinueOnError)
+		p := parser.Bool("p", false, "Create with parents")
+		parser.Parse(args)
+		dirIdx := 1
+		if p != nil && !*p {
+			dirIdx = 0
+		}
+		dirsToCreate = strings.Split(args[dirIdx], "/")
+	} else if len(args) == 1 {
+		dirsToCreate = []string{args[0]}
+	}
 
-func (cmd mkdir) Execute(client apiclient.ApiClient) (string, error) {
-	// todo -p
-	if _, err := client.Mkdir(wd.Id, cmd.name); err != nil {
+	lastParentId := wd.Id
+	var err error
+	for i := 0; i < len(dirsToCreate) && err == nil; i++ {
+		dirToCreate := dirsToCreate[i]
+		lastParentId, err = client.Mkdir(lastParentId, dirToCreate)
+	}
+	if err != nil {
 		return "", err
 	} else {
 		return "", nil
 	}
 }
 
-type cd struct {
-	dirname string
-}
-
-func (cmd cd) Execute(client apiclient.ApiClient) (string, error) {
+func cd(args []string, client apiclient.ApiClient) (string, error) {
+	if len(args) < 2 {
+		return "", errors.New("Not enough arguments in call to cd")
+	}
 	// todo path/to/file
-	if cmd.dirname == ".." {
+
+	dirname := args[0]
+	if dirname == ".." {
 		if wd.Parent() != nil {
 			wd = wd.Parent()
 		}
 		return "", nil
-	} else if file := fs.FileWithName(wd.Id, cmd.dirname); file == nil || !file.Exists() {
-		return "", errors.New("No such folder " + cmd.dirname)
+	} else if file := fs.FileWithName(wd.Id, dirname); file == nil || !file.Exists() {
+		return "", errors.New("No such folder " + dirname)
 	} else if !file.IsDir() {
-		return "", errors.New(cmd.dirname + " not a directory")
+		return "", errors.New(dirname + " not a directory")
 	} else {
 		wd = file
 		return "", nil
 	}
 }
 
-type pwd struct{}
-
-func (cmd pwd) Execute(client apiclient.ApiClient) (string, error) {
+func pwd(args []string, client apiclient.ApiClient) (string, error) {
 	here := wd
 	path := wd.Name()
 	for ; here.Parent() != nil && here.Parent().Parent() != nil; here = here.Parent() {
