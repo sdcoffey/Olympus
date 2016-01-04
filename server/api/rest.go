@@ -2,16 +2,42 @@ package api
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/fs"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 )
+
+type Encoder interface {
+	Encode(interface{}) error
+}
+
+type Decoder interface {
+	Decode(interface{}) error
+}
+
+func encoderFromHeader(w io.Writer, header http.Header) Encoder {
+	if header.Get("Accept") == "application/gob" {
+		return gob.NewEncoder(w)
+	} else {
+		return json.NewEncoder(w)
+	}
+}
+
+func decoderFromHeader(body io.Reader, header http.Header) Decoder {
+	if header.Get("Content-Type") == "application/gob" {
+		return gob.NewDecoder(body)
+	} else {
+		return json.NewDecoder(body)
+	}
+}
 
 // v1/ls/{parentId}
 func LsFiles(writer http.ResponseWriter, req *http.Request) {
@@ -28,7 +54,7 @@ func LsFiles(writer http.ResponseWriter, req *http.Request) {
 		response[idx] = child.FileInfo()
 	}
 
-	encoder := gob.NewEncoder(writer)
+	encoder := encoderFromHeader(writer, req.Header)
 	writer.WriteHeader(200)
 	encoder.Encode(response)
 }
@@ -88,7 +114,7 @@ func MkDir(writer http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		writeError(err, writer)
 	} else {
-		encoder := gob.NewEncoder(writer)
+		encoder := encoderFromHeader(writer, req.Header)
 		writer.WriteHeader(200)
 		encoder.Encode(newFolder.Id)
 	}
@@ -107,7 +133,7 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 
 	var fileInfo fs.FileInfo
 	defer req.Body.Close()
-	decoder := gob.NewDecoder(req.Body)
+	decoder := decoderFromHeader(req.Body, req.Header)
 	err := decoder.Decode(&fileInfo)
 
 	if err != nil {
@@ -120,7 +146,7 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 		if newFile, err := fs.MkFile(fileInfo.Name, parent.Id, fileInfo.Size, fileInfo.MTime); err != nil {
 			writeError(err, writer)
 		} else {
-			encoder := gob.NewEncoder(writer)
+			encoder := encoderFromHeader(writer, req.Header)
 			writer.WriteHeader(200)
 			fileInfo.Id = newFile.Id
 			encoder.Encode(fileInfo)
@@ -139,7 +165,7 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 
 	var fileInfo fs.FileInfo
 	defer req.Body.Close()
-	decoder := gob.NewDecoder(req.Body)
+	decoder := decoderFromHeader(req.Body, req.Header)
 	err := decoder.Decode(&fileInfo)
 
 	if err != nil {
@@ -192,7 +218,7 @@ func HasBlocks(writer http.ResponseWriter, req *http.Request) {
 	}
 
 	writer.WriteHeader(200)
-	encoder := gob.NewEncoder(writer)
+	encoder := encoderFromHeader(writer, req.Header)
 	encoder.Encode(&neededBlocks)
 }
 

@@ -3,10 +3,10 @@ package fs
 import (
 	"crypto"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/env"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"

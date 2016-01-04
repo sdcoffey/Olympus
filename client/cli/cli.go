@@ -7,24 +7,16 @@ import (
 	"fmt"
 	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
-	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/client/shared"
 	"github.com/sdcoffey/olympus/peer"
 	"os"
 	"strings"
-	"flag"
 )
 
-type Command func([]string, apiclient.ApiClient) (string, error)
-
-var wd *fs.OFile
+type Command func(string, []string, *shared.Model) (string, error)
 
 func main() {
-	fs.Init(initDb())
-	if root, err := fs.RootNode(); err != nil {
-		println("Error creating memory graph: " + err.Error())
-	} else {
-		wd = root
-	}
+	handle := initDb()
 
 	println("Searching for Olympus instances")
 	var client apiclient.ApiClient
@@ -37,21 +29,28 @@ func main() {
 		client = apiclient.ApiClient{Address: resolvedPath}
 	}
 
+	model := shared.NewModel(client, handle)
+	if err := model.Init(); err != nil {
+		panic(err)
+	}
+
 	print("O> ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		stringCommand := strings.TrimSpace(string(scanner.Bytes()))
 		var args []string
+		var flags string
 		if strings.Contains(stringCommand, " ") {
 			if commandComponents := strings.Split(stringCommand, " "); len(commandComponents) > 1 {
 				args = commandComponents[1:len(commandComponents)]
+				flags = parseFlags(&args)
 				stringCommand = commandComponents[0]
 			}
 		}
 		if command := parseCommand(stringCommand); command != nil {
-			if result, err := command(args, client); err != nil {
-				println(fmt.Sprint("Error: ", err.Error()))
-			} else {
+			if result, err := command(flags, args, model); err != nil {
+				println(err.Error())
+			} else if result != "" {
 				println(result)
 			}
 		} else {
@@ -87,78 +86,45 @@ func initDb() *cayley.Handle {
 	return graph
 }
 
-func ls(args []string, client apiclient.ApiClient) (string, error) {
-	// todo lh
-	if fis, err := client.Ls(wd.Id); err != nil {
+func ls(flags string, args []string, model *shared.Model) (string, error) {
+	if err := model.Refresh(); err != nil {
 		return "", err
 	} else {
 		var response bytes.Buffer
-		for _, fi := range fis {
-			file := fs.FileWithFileInfo(fi)
-			response.WriteString(fi.Name)
-			response.WriteString("    ")
-			file.Save()
+		for i := 0; i < model.Count(); i++ {
+			response.WriteString(model.At(i).Name())
+			if strings.Contains(flags, "l") {
+				response.WriteString("\n")
+			} else {
+				response.WriteString("    ")
+			}
 		}
-
 		return response.String(), nil
 	}
 }
 
-func mkdir(args []string, client apiclient.ApiClient) (string, error) {
-	var dirsToCreate []string
-	if len(args) == 0 {
-		return "", errors.New("Not enough arguments in call to mkdir")
-	} else if len(args) > 1 || strings.Contains(args[0], "/"){
-		parser := flag.NewFlagSet("ls", flag.ContinueOnError)
-		p := parser.Bool("p", false, "Create with parents")
-		parser.Parse(args)
-		dirIdx := 1
-		if p != nil && !*p {
-			dirIdx = 0
-		}
-		dirsToCreate = strings.Split(args[dirIdx], "/")
-	} else if len(args) == 1 {
-		dirsToCreate = []string{args[0]}
-	}
-
-	lastParentId := wd.Id
-	var err error
-	for i := 0; i < len(dirsToCreate) && err == nil; i++ {
-		dirToCreate := dirsToCreate[i]
-		lastParentId, err = client.Mkdir(lastParentId, dirToCreate)
-	}
-	if err != nil {
-		return "", err
-	} else {
-		return "", nil
-	}
+func mkdir(flags string, args []string, model *shared.Model) (string, error) {
+	newName := args[0]
+	return "", model.CreateDirectory(newName)
 }
 
-func cd(args []string, client apiclient.ApiClient) (string, error) {
-	if len(args) < 2 {
+func cd(flags string, args []string, model *shared.Model) (string, error) {
+	if len(args) < 1 {
 		return "", errors.New("Not enough arguments in call to cd")
 	}
 	// todo path/to/file
 
 	dirname := args[0]
-	if dirname == ".." {
-		if wd.Parent() != nil {
-			wd = wd.Parent()
-		}
-		return "", nil
-	} else if file := fs.FileWithName(wd.Id, dirname); file == nil || !file.Exists() {
-		return "", errors.New("No such folder " + dirname)
-	} else if !file.IsDir() {
-		return "", errors.New(dirname + " not a directory")
+	if file := model.FindFileByName(dirname); file == nil {
+		return "", errors.New(fmt.Sprintf("No such file: %s", dirname))
 	} else {
-		wd = file
-		return "", nil
+		return "", model.MoveToNode(file.Id)
 	}
 }
 
-func pwd(args []string, client apiclient.ApiClient) (string, error) {
-	here := wd
-	path := wd.Name()
+func pwd(flags string, args []string, model *shared.Model) (string, error) {
+	here := model.Root()
+	path := here.Name()
 	for ; here.Parent() != nil && here.Parent().Parent() != nil; here = here.Parent() {
 		path = here.Parent().Name() + "/" + path
 	}
@@ -166,4 +132,22 @@ func pwd(args []string, client apiclient.ApiClient) (string, error) {
 	path = "/" + path
 
 	return path, nil
+}
+
+func parseFlags(rawArgs *[]string) string {
+	filteredArgs := make([]string, 0)
+	buf := bytes.NewBufferString("")
+	for _, arg := range *rawArgs {
+		arg = strings.TrimSpace(arg)
+		if strings.HasPrefix(arg, "-") && len(arg) > 1 {
+			for i := 1; i < len(arg); i++ {
+				buf.WriteByte(arg[i])
+			}
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	*rawArgs = filteredArgs
+	return buf.String()
 }
