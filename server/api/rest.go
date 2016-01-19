@@ -122,6 +122,7 @@ func MkDir(writer http.ResponseWriter, req *http.Request) {
 
 // v1/cr/{parentId}/{name}
 // body -> {FileInfo}
+// returns -> {FileInfo}
 func Cr(writer http.ResponseWriter, req *http.Request) {
 	parent := fs.FileWithId(paramFromRequest("parentId", req))
 	if !parent.Exists() {
@@ -134,9 +135,8 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 	var fileInfo fs.FileInfo
 	defer req.Body.Close()
 	decoder := decoderFromHeader(req.Body, req.Header)
-	err := decoder.Decode(&fileInfo)
 
-	if err != nil {
+	if err := decoder.Decode(&fileInfo); err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
@@ -173,18 +173,20 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	changes := make([]func() error, 3)
-	changes[0] = func() error {
-		return file.Mv(fileInfo.Name, file.Parent().Id)
+	changes := []func() error{
+		func() error {
+			return file.Mv(fileInfo.Name, file.Parent().Id)
+		},
+		func() error {
+			return file.Chmod(os.FileMode(fileInfo.Attr))
+		},
+		func() error {
+			return file.Touch(fileInfo.MTime)
+		},
+		func() error {
+			return file.Resize(fileInfo.Size)
+		},
 	}
-	changes[1] = func() error {
-		return file.Chmod(os.FileMode(fileInfo.Attr))
-	}
-	changes[2] = func() error {
-		return file.Touch(fileInfo.MTime)
-	}
-
-	//todo :resize
 
 	for i := 0; i < len(changes) && err == nil; i++ {
 		err = changes[i]()
@@ -198,7 +200,7 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 }
 
 // v1/hasBlocks/{fileId}?blocks=hash1,hash2
-// body {[]string} (hashes we don't have)
+// returns -> {[]string} (hashes we don't have)
 func HasBlocks(writer http.ResponseWriter, req *http.Request) {
 	file := fs.FileWithId(paramFromRequest("fileId", req))
 	if !file.Exists() {
@@ -266,9 +268,8 @@ func paramFromRequest(key string, req *http.Request) string {
 }
 
 func writeStatusErr(statusCode int, err error, writer http.ResponseWriter) {
-	encoder := gob.NewEncoder(writer)
 	writer.WriteHeader(statusCode)
-	encoder.Encode(err.Error())
+	writer.Write([]byte(err.Error()))
 }
 
 func writeError(err error, writer http.ResponseWriter) {
@@ -276,7 +277,6 @@ func writeError(err error, writer http.ResponseWriter) {
 }
 
 func writeFileNotFoundError(file *fs.OFile, writer http.ResponseWriter) {
-	encoder := gob.NewEncoder(writer)
 	writer.WriteHeader(400)
-	encoder.Encode(fmt.Sprintf("File with id: %s does not exist", file.Id))
+	writer.Write([]byte(fmt.Sprintf("File with id: %s does not exist", file.Id)))
 }
