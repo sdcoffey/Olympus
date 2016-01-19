@@ -11,6 +11,17 @@ import (
 	"strings"
 )
 
+type OlympusClient interface {
+	ListFiles(parentId string) ([]fs.FileInfo, error)
+	CreateDirectory(parentId, name string) (string, error)
+	MoveFile(fileid, newParentId, newName string) error
+	RemoveFile(fileId string) error
+	CreateFile(info fs.FileInfo) (fs.FileInfo, error)
+	UpdateFile(info fs.FileInfo) error
+	HasBlocks(fileId string, blocks []string) ([]string, error)
+	SendBlock(fileId string, block fs.BlockInfo, data io.Reader) error
+}
+
 type ApiClient struct {
 	Address string
 }
@@ -108,9 +119,8 @@ func (client ApiClient) CreateFile(info fs.FileInfo) (fs.FileInfo, error) {
 	}
 }
 
-func (client ApiClient) UpdateFile(file *fs.OFile) error {
-	url := client.url(fmt.Sprintf("update/%s", file.Id))
-	fileInfo := fs.FileInfoFromFile(file)
+func (client ApiClient) UpdateFile(fileInfo fs.FileInfo) error {
+	url := client.url(fmt.Sprintf("update/%s", fileInfo.Id))
 	body := new(bytes.Buffer)
 	encoder := gob.NewEncoder(body)
 	if err := encoder.Encode(fileInfo); err != nil {

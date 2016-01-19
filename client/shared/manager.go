@@ -8,11 +8,11 @@ import (
 
 type OManager struct {
 	Model  *OModel
-	api    apiclient.ApiClient
+	api    apiclient.OlympusClient
 	handle *cayley.Handle
 }
 
-func NewManager(client apiclient.ApiClient, dbConnection *cayley.Handle) *OManager {
+func NewManager(client apiclient.OlympusClient, dbConnection *cayley.Handle) *OManager {
 	manager := new(OManager)
 	manager.api = client
 	manager.handle = dbConnection

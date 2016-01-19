@@ -9,10 +9,10 @@ import (
 
 type OModel struct {
 	Root *fs.OFile
-	api  apiclient.ApiClient
+	api  apiclient.OlympusClient
 }
 
-func newModel(api apiclient.ApiClient, RootId string) *OModel {
+func newModel(api apiclient.OlympusClient, RootId string) *OModel {
 	model := new(OModel)
 	model.Root = fs.FileWithId(RootId)
 	model.api = api
