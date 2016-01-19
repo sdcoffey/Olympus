@@ -8,8 +8,8 @@ import (
 )
 
 type OModel struct {
-	Root     *fs.OFile
-	api      apiclient.ApiClient
+	Root *fs.OFile
+	api  apiclient.ApiClient
 }
 
 func newModel(api apiclient.ApiClient, RootId string) *OModel {
