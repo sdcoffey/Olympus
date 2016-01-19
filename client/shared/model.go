@@ -3,30 +3,26 @@ package shared
 import (
 	"errors"
 	"fmt"
-	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/fs"
 )
 
-type Model struct {
-	root     *fs.OFile
-	client   apiclient.ApiClient
-	children []*fs.OFile
+type OModel struct {
+	Root     *fs.OFile
+	api      apiclient.ApiClient
 }
 
-func NewModel(client apiclient.ApiClient, db *cayley.Handle) *Model {
-	model := new(Model)
-	model.client = client
-	fs.Init(db)
+func newModel(api apiclient.ApiClient, RootId string) *OModel {
+	model := new(OModel)
+	model.Root = fs.FileWithId(RootId)
+	model.api = api
 
 	return model
 }
 
-func (model *Model) Init() error {
-	if root, err := fs.RootNode(); err != nil {
-		return err
-	} else {
-		model.root = root
+func (model *OModel) Init() error {
+	if !model.Root.Exists() {
+		return errors.New(fmt.Sprintf("Root with id: %s does not exist", model.Root))
 	}
 
 	if err := model.Refresh(); err != nil {
@@ -36,88 +32,40 @@ func (model *Model) Init() error {
 	}
 }
 
-func (model *Model) MoveToNode(id string) error {
-	var file *fs.OFile
-	file = fs.FileWithId(id)
-
-	if !file.Exists() {
-		return errors.New(fmt.Sprintf("File with id: %s not found", id))
-	} else if !file.IsDir() {
-		return errors.New(fmt.Sprint("Cannot move to non-directory"))
-	} else {
-		model.root = file
-		if err := model.Refresh(); err != nil {
-			return err
-		} else {
-			model.children = file.Children()
-			return nil
-		}
-	}
-}
-
-func (model *Model) Root() *fs.OFile {
-	return model.root
-}
-
-func (model *Model) Refresh() error {
+func (model *OModel) Refresh() error {
 	fileSet := make(map[string]string)
-	for _, fod := range model.children {
-		fileSet[fod.Id] = ""
+	for _, fileOnDisk := range model.Root.Children() {
+		fileSet[fileOnDisk.Id] = ""
 	}
 
-	if fileInfos, err := model.client.Ls(model.root.Id); err != nil {
+	if fileInfos, err := model.api.ListFiles(model.Root.Id); err != nil {
 		return err
 	} else {
-		model.children = make([]*fs.OFile, len(fileInfos))
-		for idx, fi := range fileInfos {
+		var err error
+		for i := 0; i < len(fileInfos) && err == nil; i++ {
+			fi := fileInfos[i]
 			file := fs.FileWithFileInfo(fi)
-			file.Save()
+			err = file.Save()
 			if _, ok := fileSet[fi.Id]; ok {
 				delete(fileSet, fi.Id)
 			}
-
-			model.children[idx] = file
 		}
 	}
 
 	for id, _ := range fileSet {
-		file := fs.FileWithId(id)
-		fs.Rm(file)
+		staleId := fs.FileWithId(id)
+		fs.Rm(staleId)
 	}
 
 	return nil
 }
 
-func (model *Model) Count() int {
-	return len(model.root.Children())
-}
-
-func (model *Model) At(index int) *fs.OFile {
-	if index < 0 || index >= len(model.children) {
-		return nil
-	} else {
-		return model.children[index]
-	}
-}
-
-func (model *Model) FindFileByName(name string) *fs.OFile {
-	if name == ".." {
-		return model.root.Parent()
-	} else if file := fs.FileWithName(model.root.Id, name); file == nil {
+func (model *OModel) FindFileByName(name string) *fs.OFile {
+	if file := fs.FileWithName(model.Root.Id, name); file == nil {
 		model.Refresh()
-		file = fs.FileWithName(model.root.Id, name)
+		file = fs.FileWithName(model.Root.Id, name)
 		return file
 	} else {
 		return file
-	}
-}
-
-func (model *Model) CreateDirectory(name string) error {
-	if _, err := model.client.Mkdir(model.root.Id, name); err != nil {
-		return err
-	} else if err := model.Refresh(); err != nil {
-		return err
-	} else {
-		return nil
 	}
 }
