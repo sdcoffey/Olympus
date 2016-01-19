@@ -41,14 +41,14 @@ func newFile(filename string) *OFile {
 }
 
 func FileWithFileInfo(info FileInfo) *OFile {
-	ofile := FileWithId(info.Id)
-	ofile.name = info.Name
-	ofile.parentId = info.ParentId
-	ofile.mode = os.FileMode(info.Attr)
-	ofile.size = info.Size
-	ofile.mTime = info.MTime
+	file := FileWithId(info.Id)
+	file.name = info.Name
+	file.parentId = info.ParentId
+	file.mode = os.FileMode(info.Attr)
+	file.size = info.Size
+	file.mTime = info.MTime
 
-	return ofile
+	return file
 }
 
 func FileWithId(id string) *OFile {
