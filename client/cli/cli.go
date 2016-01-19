@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-type Command func(string, []string, *shared.Model) (string, error)
+type Command func(string, []string, *shared.OManager) (string, error)
 
 func main() {
 	handle := initDb()
@@ -29,8 +29,8 @@ func main() {
 		client = apiclient.ApiClient{Address: resolvedPath}
 	}
 
-	model := shared.NewModel(client, handle)
-	if err := model.Init(); err != nil {
+	manager := shared.NewManager(client, handle)
+	if err := manager.Init(); err != nil {
 		panic(err)
 	}
 
@@ -48,7 +48,7 @@ func main() {
 			}
 		}
 		if command := parseCommand(stringCommand); command != nil {
-			if result, err := command(flags, args, model); err != nil {
+			if result, err := command(flags, args, manager); err != nil {
 				println(err.Error())
 			} else if result != "" {
 				println(result)
@@ -86,13 +86,14 @@ func initDb() *cayley.Handle {
 	return graph
 }
 
-func ls(flags string, args []string, model *shared.Model) (string, error) {
+func ls(flags string, args []string, manager *shared.OManager) (string, error) {
+	model := manager.Model
 	if err := model.Refresh(); err != nil {
 		return "", err
 	} else {
 		var response bytes.Buffer
-		for i := 0; i < model.Count(); i++ {
-			response.WriteString(model.At(i).Name())
+		for _, file := range model.Root.Children() {
+			response.WriteString(file.Name())
 			if strings.Contains(flags, "l") {
 				response.WriteString("\n")
 			} else {
@@ -103,28 +104,40 @@ func ls(flags string, args []string, model *shared.Model) (string, error) {
 	}
 }
 
-func mkdir(flags string, args []string, model *shared.Model) (string, error) {
-	newName := args[0]
-	return "", model.CreateDirectory(newName)
+func mkdir(flags string, args []string, manager *shared.OManager) (string, error) {
+	var name string
+	if len(args) == 0 {
+		return "", errors.New("Not enough arguments in call to mkdir")
+	}
+	name = args[0]
+
+	return "", manager.CreateDirectory(manager.Model.Root.Id, name)
 }
 
-func cd(flags string, args []string, model *shared.Model) (string, error) {
+func cd(flags string, args []string, manager *shared.OManager) (string, error) {
 	if len(args) < 1 {
 		return "", errors.New("Not enough arguments in call to cd")
 	}
-	// todo path/to/file
 
 	dirname := args[0]
-	if file := model.FindFileByName(dirname); file == nil {
+	if dirname == ".." {
+		if manager.Model.Root.Parent() == nil {
+			return "", nil
+		}
+		return "", manager.ChangeDirectory(manager.Model.Root.Parent().Id)
+	} else if file := manager.Model.FindFileByName(dirname); file == nil {
 		return "", errors.New(fmt.Sprintf("No such file: %s", dirname))
 	} else {
-		return "", model.MoveToNode(file.Id)
+		return "", manager.ChangeDirectory(file.Id)
 	}
 }
 
-func pwd(flags string, args []string, model *shared.Model) (string, error) {
-	here := model.Root()
-	path := here.Name()
+func pwd(flags string, args []string, manager *shared.OManager) (string, error) {
+	here := manager.Model.Root
+	var path string
+	if here.Parent() != nil {
+		path = here.Name()
+	}
 	for ; here.Parent() != nil && here.Parent().Parent() != nil; here = here.Parent() {
 		path = here.Parent().Name() + "/" + path
 	}
