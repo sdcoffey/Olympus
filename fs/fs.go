@@ -22,13 +22,12 @@ type GraphWriter interface {
 	Delete() error
 }
 
-func Init(graph *cayley.Handle) {
+func Init(graph *cayley.Handle) error {
 	globalFs = &Fs{graph}
 	var err error
 	rootNode, err = RootNode()
-	if err != nil {
-		panic(err)
-	}
+
+	return err
 }
 
 func GlobalFs() *Fs {
@@ -126,5 +125,10 @@ func MkFile(name, parentId string, size int64, mTime time.Time) (of *OFile, err 
 
 func (of *OFile) Touch(mTime time.Time) (err error) {
 	of.mTime = mTime
+	return of.Save()
+}
+
+func (of *OFile) Resize(size int64) error {
+	of.size = size
 	return of.Save()
 }

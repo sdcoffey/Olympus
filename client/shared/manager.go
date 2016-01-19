@@ -17,7 +17,9 @@ func NewManager(client apiclient.ApiClient, dbConnection *cayley.Handle) *OManag
 	manager.api = client
 	manager.handle = dbConnection
 	manager.Model = newModel(client, fs.RootNodeId)
-	fs.Init(manager.handle)
+	if err := fs.Init(manager.handle); err != nil {
+		panic(err)
+	}
 
 	return manager
 }

@@ -18,8 +18,7 @@ var debug = false
 
 func main() {
 	env.InitializeEnvironment()
-	err := initDb()
-	if err != nil {
+	if err := initDb(); err != nil {
 		println(err.Error())
 		os.Exit(1)
 	} else {
@@ -60,6 +59,5 @@ func initDb() (err error) {
 		}
 	}
 
-	fs.Init(handle)
-	return
+	return fs.Init(handle)
 }
