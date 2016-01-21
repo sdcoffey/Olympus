@@ -22,7 +22,7 @@ func newModel(api apiclient.OlympusClient, RootId string) *OModel {
 
 func (model *OModel) Init() error {
 	if !model.Root.Exists() {
-		return errors.New(fmt.Sprintf("Root with id: %s does not exist", model.Root))
+		return errors.New(fmt.Sprintf("Root with id: %s does not exist", model.Root.Id))
 	}
 
 	if err := model.Refresh(); err != nil {
@@ -33,9 +33,9 @@ func (model *OModel) Init() error {
 }
 
 func (model *OModel) Refresh() error {
-	fileSet := make(map[string]string)
+	fileSet := make(map[string]bool)
 	for _, fileOnDisk := range model.Root.Children() {
-		fileSet[fileOnDisk.Id] = ""
+		fileSet[fileOnDisk.Id] = true
 	}
 
 	if fileInfos, err := model.api.ListFiles(model.Root.Id); err != nil {
@@ -49,6 +49,10 @@ func (model *OModel) Refresh() error {
 			if _, ok := fileSet[fi.Id]; ok {
 				delete(fileSet, fi.Id)
 			}
+		}
+
+		if err != nil {
+			return err
 		}
 	}
 
