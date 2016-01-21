@@ -56,12 +56,12 @@ func FileWithId(id string) *OFile {
 }
 
 func FileWithName(parentId, name string) *OFile {
-	namePath := cayley.StartPath(GlobalFs().Graph, name).In(nameLink)
-	parentpath := cayley.StartPath(GlobalFs().Graph, parentId).In(parentLink)
+	namePath := cayley.StartPath(GlobalFs(), name).In(nameLink)
+	parentpath := cayley.StartPath(GlobalFs(), parentId).In(parentLink)
 
 	it := namePath.And(parentpath).BuildIterator()
 	if cayley.RawNext(it) {
-		return FileWithId(GlobalFs().Graph.NameOf(it.Result()))
+		return FileWithId(GlobalFs().NameOf(it.Result()))
 	}
 
 	return nil
@@ -155,10 +155,10 @@ func (of *OFile) Children() []*OFile {
 		return make([]*OFile, 0)
 	}
 
-	it := cayley.StartPath(GlobalFs().Graph, of.Id).In(parentLink).BuildIterator()
+	it := cayley.StartPath(GlobalFs(), of.Id).In(parentLink).BuildIterator()
 	children := make([]*OFile, 0, 10)
 	for cayley.RawNext(it) {
-		child := FileWithId(GlobalFs().Graph.NameOf(it.Result()))
+		child := FileWithId(GlobalFs().NameOf(it.Result()))
 		child.parentId = of.Id
 		children = append(children, child)
 	}
@@ -171,7 +171,7 @@ func (of *OFile) Blocks() []*OFileBlock {
 		return make([]*OFileBlock, 0)
 	}
 
-	it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(blockLink).BuildIterator()
+	it := cayley.StartPath(GlobalFs(), of.Id).Out(blockLink).BuildIterator()
 	maxBlocks := of.Size() / BLOCK_SIZE
 	if of.Size()%BLOCK_SIZE > 0 {
 		maxBlocks++
@@ -179,7 +179,7 @@ func (of *OFile) Blocks() []*OFileBlock {
 
 	blocks := make([]*OFileBlock, 0, maxBlocks)
 	for cayley.RawNext(it) {
-		blocks = append(blocks, BlockWithHash(GlobalFs().Graph.NameOf(it.Result())))
+		blocks = append(blocks, BlockWithHash(GlobalFs().NameOf(it.Result())))
 	}
 
 	return blocks
@@ -190,12 +190,12 @@ func (of *OFile) BlockWithOffset(offset int64) *OFileBlock {
 		return nil
 	}
 
-	filePath := cayley.StartPath(GlobalFs().Graph, of.Id).Out(blockLink)
-	filePath.And(cayley.StartPath(GlobalFs().Graph, fmt.Sprint(offset)).In(offsetLink))
+	filePath := cayley.StartPath(GlobalFs(), of.Id).Out(blockLink)
+	filePath.And(cayley.StartPath(GlobalFs(), fmt.Sprint(offset)).In(offsetLink))
 
 	it := filePath.BuildIterator()
 	if cayley.RawNext(it) {
-		return BlockWithHash(GlobalFs().Graph.NameOf(it.Result()))
+		return BlockWithHash(GlobalFs().NameOf(it.Result()))
 	}
 
 	return nil
@@ -204,7 +204,7 @@ func (of *OFile) BlockWithOffset(offset int64) *OFileBlock {
 func (of *OFile) AddBlock(block *OFileBlock, offset int64) error {
 	block.offset = offset
 	if err := block.Save(); err == nil {
-		if err = GlobalFs().Graph.QuadWriter.AddQuad(cayley.Quad(of.Id, blockLink, block.Hash, "")); err != nil {
+		if err = GlobalFs().QuadWriter.AddQuad(cayley.Quad(of.Id, blockLink, block.Hash, "")); err != nil {
 			return err
 		}
 	} else {
@@ -215,7 +215,7 @@ func (of *OFile) AddBlock(block *OFileBlock, offset int64) error {
 }
 
 func (of *OFile) RemoveBlock(block *OFileBlock) error {
-	return GlobalFs().Graph.RemoveQuad(cayley.Quad(of.Id, blockLink, block.Hash, ""))
+	return GlobalFs().RemoveQuad(cayley.Quad(of.Id, blockLink, block.Hash, ""))
 }
 
 // interface GraphWriter
@@ -260,9 +260,9 @@ func (of *OFile) Save() (err error) {
 		newQuads.AddQuad(cayley.Quad(of.Id, parentLink, of.parentId, ""))
 	}
 
-	if err = GlobalFs().Graph.ApplyTransaction(staleQuads); err != nil {
+	if err = GlobalFs().ApplyTransaction(staleQuads); err != nil {
 		return
-	} else if err = GlobalFs().Graph.ApplyTransaction(newQuads); err != nil {
+	} else if err = GlobalFs().ApplyTransaction(newQuads); err != nil {
 		return
 	}
 
@@ -291,10 +291,14 @@ func (of *OFile) FileInfo() FileInfo {
 	return info
 }
 
+func (of *OFile) String() string {
+	return fmt.Sprintf("%s	%d	%s	%s", of.Mode(), of.Size(), of.ModTime().Format(time.Stamp), of.Name())
+}
+
 func (of *OFile) graphValue(key string) (value string) {
-	it := cayley.StartPath(GlobalFs().Graph, of.Id).Out(key).BuildIterator()
+	it := cayley.StartPath(GlobalFs(), of.Id).Out(key).BuildIterator()
 	if cayley.RawNext(it) {
-		value = GlobalFs().Graph.NameOf(it.Result())
+		value = GlobalFs().NameOf(it.Result())
 	}
 
 	return
@@ -322,7 +326,7 @@ func (of *OFile) delete() (err error) {
 		transaction.RemoveQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
 	}
 
-	err = GlobalFs().Graph.ApplyTransaction(transaction)
+	err = GlobalFs().ApplyTransaction(transaction)
 
 	if err == nil {
 		of.mode = 1

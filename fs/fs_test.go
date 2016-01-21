@@ -42,9 +42,9 @@ func TestRootNode_CreatesRootNode(t *testing.T) {
 	assert.Equal(t, "rootNode", root.Id)
 	assert.EqualValues(t, 700|os.ModeDir, root.Mode())
 
-	it := cayley.StartPath(GlobalFs().Graph, "rootNode").Out(nameLink).BuildIterator()
+	it := cayley.StartPath(GlobalFs(), "rootNode").Out(nameLink).BuildIterator()
 	assert.True(t, cayley.RawNext(it))
-	assert.Equal(t, "root", GlobalFs().Graph.NameOf(it.Result()))
+	assert.Equal(t, "root", GlobalFs().NameOf(it.Result()))
 }
 
 func TestRm_throwsWhenDeletingRootNode(t *testing.T) {

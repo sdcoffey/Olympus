@@ -14,12 +14,7 @@ var rootNode *OFile
 const RootNodeId = "rootNode"
 
 type Fs struct {
-	Graph *cayley.Handle
-}
-
-type GraphWriter interface {
-	Save() error
-	Delete() error
+	*cayley.Handle
 }
 
 func Init(graph *cayley.Handle) error {

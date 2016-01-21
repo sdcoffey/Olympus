@@ -47,9 +47,9 @@ func TestSave_savesBlock(t *testing.T) {
 	err := block.Save()
 	assert.Nil(t, err)
 
-	it := cayley.StartPath(GlobalFs().Graph, block.Hash).Out(offsetLink).BuildIterator()
+	it := cayley.StartPath(GlobalFs(), block.Hash).Out(offsetLink).BuildIterator()
 	assert.True(t, cayley.RawNext(it))
-	assert.Equal(t, "0", GlobalFs().Graph.NameOf(it.Result()))
+	assert.Equal(t, "0", GlobalFs().NameOf(it.Result()))
 }
 
 func TestSave_throwsOnBadOffset(t *testing.T) {

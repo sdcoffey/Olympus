@@ -58,9 +58,9 @@ func (ofb *OFileBlock) Save() (err error) {
 	}
 	newQuads.AddQuad(cayley.Quad(ofb.Hash, offsetLink, fmt.Sprint(ofb.offset), ""))
 
-	if err = GlobalFs().Graph.ApplyTransaction(staleQuads); err != nil {
+	if err = GlobalFs().ApplyTransaction(staleQuads); err != nil {
 		return
-	} else if err = GlobalFs().Graph.ApplyTransaction(newQuads); err != nil {
+	} else if err = GlobalFs().ApplyTransaction(newQuads); err != nil {
 		return
 	}
 
@@ -87,9 +87,9 @@ func (ofb *OFileBlock) Write(bytes []byte) (n int, err error) {
 }
 
 func (ofb *OFileBlock) Offset() int64 {
-	it := cayley.StartPath(GlobalFs().Graph, ofb.Hash).Out(offsetLink).BuildIterator()
+	it := cayley.StartPath(GlobalFs(), ofb.Hash).Out(offsetLink).BuildIterator()
 	if cayley.RawNext(it) {
-		if val, err := strconv.ParseInt(GlobalFs().Graph.NameOf(it.Result()), 10, 64); err == nil {
+		if val, err := strconv.ParseInt(GlobalFs().NameOf(it.Result()), 10, 64); err == nil {
 			return val
 		}
 	}

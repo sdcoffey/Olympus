@@ -168,7 +168,7 @@ func TestSave(t *testing.T) {
 	err := file.Save()
 	assert.Nil(t, err)
 
-	g := GlobalFs().Graph
+	g := GlobalFs()
 	assertProperty := func(expected string, actual cayley.Iterator) {
 		assert.True(t, cayley.RawNext(actual))
 		assert.Equal(t, expected, g.NameOf(actual.Result()))
