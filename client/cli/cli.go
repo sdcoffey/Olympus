@@ -93,10 +93,11 @@ func ls(flags string, args []string, manager *shared.OManager) (string, error) {
 	} else {
 		var response bytes.Buffer
 		for _, file := range model.Root.Children() {
-			response.WriteString(file.Name())
 			if strings.Contains(flags, "l") {
+				response.WriteString(file.String())
 				response.WriteString("\n")
 			} else {
+				response.WriteString(file.Name())
 				response.WriteString("    ")
 			}
 		}
