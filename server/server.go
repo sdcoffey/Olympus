@@ -4,7 +4,6 @@ import (
 	"github.com/google/cayley"
 	"github.com/google/cayley/graph"
 	_ "github.com/google/cayley/graph/bolt"
-	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/fs"
 	"github.com/sdcoffey/olympus/peer"
@@ -26,19 +25,7 @@ func main() {
 	}
 
 	go peer.ClientHeartbeat()
-
-	r := mux.NewRouter()
-	v1Router := r.PathPrefix("/v1").Subrouter()
-	v1Router.HandleFunc("/ls/{parentId}", api.LsFiles).Methods("GET")
-	v1Router.HandleFunc("/mv/{fileId}/{newParentId}", api.MvFile).Methods("PATCH")
-	v1Router.HandleFunc("/rm/{fileId}", api.RmFile).Methods("DELETE")
-	v1Router.HandleFunc("/mkdir/{parentId}/{name}", api.MkDir).Methods("POST")
-	v1Router.HandleFunc("/cr/{parentId}/{name}", api.Cr).Methods("POST")
-	v1Router.HandleFunc("/update/{fileId}", api.Update).Methods("PATCH")
-	v1Router.HandleFunc("/hasBlocks/{fileId}", api.HasBlocks).Methods("GET")
-	v1Router.HandleFunc("/dd/{fileId}/{blockHash}/{offset}", api.WriteBlock).Methods("POST")
-
-	http.ListenAndServe(":3000", r)
+	http.ListenAndServe(":3000", api.Router())
 }
 
 func initDb() (err error) {

@@ -292,7 +292,7 @@ func (of *OFile) FileInfo() FileInfo {
 }
 
 func (of *OFile) String() string {
-	return fmt.Sprintf("%s	%d	%s	%s", of.Mode(), of.Size(), of.ModTime().Format(time.Stamp), of.Name())
+	return fmt.Sprintf("%s	%d	%s	%s (%s)", of.Mode(), of.Size(), of.ModTime().Format(time.Stamp), of.Name(), of.Id)
 }
 
 func (of *OFile) graphValue(key string) (value string) {

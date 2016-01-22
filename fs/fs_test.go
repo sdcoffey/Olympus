@@ -102,6 +102,7 @@ func TestMv_movesNodeSuccessfully(t *testing.T) {
 	child := child1.Children()[0]
 	assert.Equal(t, child2.Id, child.Id)
 	assert.Equal(t, child1.Id, child.parentId)
+	assert.Equal(t, "child2", child.Name())
 }
 
 func TestMv_renamesNodeSuccessfully(t *testing.T) {
