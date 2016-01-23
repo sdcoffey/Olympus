@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+    "bufio"
 )
 
 type Encoder interface {
@@ -33,6 +34,7 @@ func Router() http.Handler {
 	v1Router.HandleFunc("/update/{fileId}", Update).Methods("PATCH")
 	v1Router.HandleFunc("/hasBlocks/{fileId}", HasBlocks).Methods("GET")
 	v1Router.HandleFunc("/dd/{fileId}/{blockHash}/{offset}", WriteBlock).Methods("POST")
+    v1Router.HandleFunc("/cat/{fileId}/{blockHash}", ReadBlock).Methods("GET")
 
 	return r
 }
@@ -275,6 +277,36 @@ func WriteBlock(writer http.ResponseWriter, req *http.Request) {
 			writer.WriteHeader(200)
 		}
 	}
+}
+
+// GET /cat/{fileId}/{blockHash}
+func ReadBlock(writer http.ResponseWriter, req *http.Request) {
+    file := fs.FileWithId(paramFromRequest("fileId", req))
+    if !file.Exists() {
+        writeFileNotFoundError(file, writer)
+        return
+    }
+
+    block := fs.BlockWithHash(paramFromRequest("blockHash", req))
+    found := false
+    for _, fb := range file.Blocks() {
+        if fb.Hash == block.Hash {
+            found = true
+            break
+        }
+    }
+
+    if !found {
+        http.Error(writer, 400, "Block with id: " + block.Hash + " does not belong to file with id: " + file.Id)
+    } else {
+        if !block.IsOnDisk() {
+            http.Error(writer, 404, "Block with id: " + block.Hash + " not found")
+        } else {
+            buf := bufio.NewReader(block)
+            // todo: writer.Header().Add("Content-Type", "application/???")
+            buf.WriteTo(writer)
+        }
+    }
 }
 
 func paramFromRequest(key string, req *http.Request) string {

@@ -22,7 +22,7 @@ const (
 
 	BLOCK_SIZE = MEGABYTE
 
-	offsetLink = "hasOffset"
+	offsetLink = "hashOffset"
 )
 
 type OFileBlock struct {
@@ -34,13 +34,12 @@ func BlockWithHash(hash string) *OFileBlock {
 	return &OFileBlock{Hash: hash, offset: -1}
 }
 
-func (ofp *OFileBlock) Read() ([]byte, error) {
-	filePath := filepath.Join(env.EnvPath(env.DataPath), ofp.Hash)
-	if !env.Exists(filePath) {
-		return make([]byte, 0), os.ErrNotExist
+func (ofb *OFileBlock) Read(p []byte) (int, error) {
+	if backingFile, err := os.Open(ofb.LocationOnDisk()); err != nil {
+		return 0, err
+	} else {
+		return backingFile.Read(p)
 	}
-
-	return ioutil.ReadFile(filePath)
 }
 
 func (ofb *OFileBlock) Save() (err error) {
@@ -95,6 +94,18 @@ func (ofb *OFileBlock) Offset() int64 {
 	}
 
 	return -1
+}
+
+func (ofb *OFileBlock) SizeOnDisk() (int64, error) {
+	if fi, err := os.Stat(ofb.LocationOnDisk()); err != nil {
+		return 0, err
+	} else {
+		return fi.Size(), nil
+	}
+}
+
+func (ofb *OFileBlock) LocationOnDisk() string {
+	return filepath.Join(env.EnvPath(env.DataPath), ofb.Hash)
 }
 
 func (ofb *OFileBlock) IsOnDisk() bool {
