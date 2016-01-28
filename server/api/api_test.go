@@ -166,7 +166,7 @@ func TestMvFile_movesFileSuccessfully(t *testing.T) {
 	assert.EqualValues(t, 1, len(rn.Children()))
 	assert.EqualValues(t, 1, len(child2.Children()))
 
-    //todo: moved file has different attrs - WHY
+	//todo: moved file has different attrs - WHY
 }
 
 func TestMvFile_renameInPlaceWorksSuccessfully(t *testing.T) {

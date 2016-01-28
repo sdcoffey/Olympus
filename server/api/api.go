@@ -4,15 +4,15 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/sdcoffey/olympus/fs"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
-    "bufio"
+
+	"github.com/gorilla/mux"
+	"github.com/sdcoffey/olympus/env"
+	"github.com/sdcoffey/olympus/fs"
 )
 
 type Encoder interface {
@@ -27,14 +27,17 @@ func Router() http.Handler {
 	r := mux.NewRouter()
 	v1Router := r.PathPrefix("/v1").Subrouter()
 	v1Router.HandleFunc("/ls/{parentId}", LsFiles).Methods("GET")
+	v1Router.HandleFunc("/ls/{fileId}/blocks", Blocks).Methods("GET")
 	v1Router.HandleFunc("/mv/{fileId}/{newParentId}", MvFile).Methods("PATCH")
 	v1Router.HandleFunc("/rm/{fileId}", RmFile).Methods("DELETE")
 	v1Router.HandleFunc("/mkdir/{parentId}/{name}", MkDir).Methods("POST")
-	v1Router.HandleFunc("/cr/{parentId}/{name}", Cr).Methods("POST")
+	v1Router.HandleFunc("/cr/{parentId}", Cr).Methods("POST")
 	v1Router.HandleFunc("/update/{fileId}", Update).Methods("PATCH")
-	v1Router.HandleFunc("/hasBlocks/{fileId}", HasBlocks).Methods("GET")
-	v1Router.HandleFunc("/dd/{fileId}/{blockHash}/{offset}", WriteBlock).Methods("POST")
-    v1Router.HandleFunc("/cat/{fileId}/{blockHash}", ReadBlock).Methods("GET")
+	v1Router.HandleFunc("/dd/{fileId}/{offset}", WriteBlock).Methods("POST")
+	v1Router.HandleFunc("/cat/{fileId}/{offset}", ReadBlock).Methods("GET")
+
+	fileServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
+	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", fileServer))
 
 	return r
 }
@@ -137,7 +140,7 @@ func MkDir(writer http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// POST v1/cr/{parentId}/{name}
+// POST v1/cr/{parentId}
 // body -> {FileInfo}
 // returns -> {FileInfo}
 func Cr(writer http.ResponseWriter, req *http.Request) {
@@ -147,8 +150,6 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	file := fs.FileWithName(parent.Id, paramFromRequest("name", req))
-
 	var fileInfo fs.FileInfo
 	defer req.Body.Close()
 	decoder := decoderFromHeader(req.Body, req.Header)
@@ -157,15 +158,15 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
-	} else if file != nil && file.Exists() {
-		http.Error(writer, fmt.Sprint("File exists, call /v1/touch/%s/to update this object", file.Id), 400)
+	} else if file := fs.FileWithName(parent.Id, fileInfo.Name); file != nil && file.Exists() {
+		http.Error(writer, fmt.Sprintf("File exists, call /v1/touch/%s/to update this object", file.Id), 400)
 	} else {
 		if newFile, err := fs.MkFile(fileInfo.Name, parent.Id, fileInfo.Size, fileInfo.MTime); err != nil {
 			http.Error(writer, err.Error(), 400)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)
 			writer.WriteHeader(200)
-			fileInfo.Id = newFile.Id
+			fileInfo = newFile.FileInfo()
 			encoder.Encode(fileInfo)
 		}
 	}
@@ -216,32 +217,26 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// GET v1/hasBlocks/{fileId}?blocks=hash1,hash2
-// returns -> {[]string} (hashes we don't have)
-func HasBlocks(writer http.ResponseWriter, req *http.Request) {
+// GET v1/hasBlocks/{fileId}/blocks
+// returns -> [BlockInfo] (hashes we don't have)
+func Blocks(writer http.ResponseWriter, req *http.Request) {
 	file := fs.FileWithId(paramFromRequest("fileId", req))
 	if !file.Exists() {
 		writeFileNotFoundError(file, writer)
 		return
+	} else if file.IsDir() {
+		http.Error(writer, fmt.Sprintf("File with id: %s is a directory", file.Id), 400)
+		return
 	}
 
-	questionableBlocks := req.URL.Query().Get("blocks")
-	questionableBlockList := strings.Split(questionableBlocks, ",")
-
-	neededBlocks := make([]string, 0, len(questionableBlockList))
-	for _, questionableBlock := range questionableBlockList {
-		block := fs.BlockWithHash(questionableBlock)
-		if !block.IsOnDisk() {
-			neededBlocks = append(neededBlocks, block.Hash)
-		}
-	}
+	blocks := file.Blocks()
 
 	writer.WriteHeader(200)
 	encoder := encoderFromHeader(writer, req.Header)
-	encoder.Encode(&neededBlocks)
+	encoder.Encode(blocks)
 }
 
-// POST v1/dd/{fileId}/{blockHash}/{offset}
+// POST v1/dd/{fileId}/{offset}
 func WriteBlock(writer http.ResponseWriter, req *http.Request) {
 	file := fs.FileWithId(paramFromRequest("fileId", req))
 	if !file.Exists() {
@@ -257,56 +252,37 @@ func WriteBlock(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	hash := paramFromRequest("blockHash", req)
-	if offset, err := strconv.ParseInt(paramFromRequest("offset", req), 10, 64); err != nil {
+	offsetString := paramFromRequest("offset", req)
+	if offset, err := strconv.ParseInt(offsetString, 10, 64); err != nil {
+		http.Error(writer, fmt.Sprintf("Invalid offset parameter: %s", offsetString), 400)
+	} else if err := file.WriteData(data, offset); err != nil {
 		http.Error(writer, err.Error(), 400)
-	} else {
-		block := file.BlockWithOffset(offset)
-		if block.Hash != hash {
-			file.RemoveBlock(block)
-			block = fs.BlockWithHash(hash)
-		}
-		if !block.IsOnDisk() {
-			if _, err = block.Write(data); err != nil {
-				http.Error(writer, err.Error(), 400)
-			}
-		}
-		if err = file.AddBlock(block, offset); err != nil {
-			http.Error(writer, err.Error(), 400)
-		} else {
-			writer.WriteHeader(200)
-		}
 	}
 }
 
-// GET /cat/{fileId}/{blockHash}
+// GET cat/{fileId}/{offset}
 func ReadBlock(writer http.ResponseWriter, req *http.Request) {
-    file := fs.FileWithId(paramFromRequest("fileId", req))
-    if !file.Exists() {
-        writeFileNotFoundError(file, writer)
-        return
-    }
+	file := fs.FileWithId(paramFromRequest("fileId", req))
+	if !file.Exists() {
+		writeFileNotFoundError(file, writer)
+		return
+	} else if file.IsDir() {
+		http.Error(writer, fmt.Sprintf("Requested file id %s is a directory", file.Id), 400)
+		return
+	}
 
-    block := fs.BlockWithHash(paramFromRequest("blockHash", req))
-    found := false
-    for _, fb := range file.Blocks() {
-        if fb.Hash == block.Hash {
-            found = true
-            break
-        }
-    }
+	offsetString := paramFromRequest("offset", req)
+	if offset, err := strconv.ParseInt(offsetString, 10, 64); err != nil {
+		http.Error(writer, fmt.Sprintf("Invalid offset parameter: %s", offsetString), 400)
+	} else {
+		block := file.BlockWithOffset(offset)
 
-    if !found {
-        http.Error(writer, 400, "Block with id: " + block.Hash + " does not belong to file with id: " + file.Id)
-    } else {
-        if !block.IsOnDisk() {
-            http.Error(writer, 404, "Block with id: " + block.Hash + " not found")
-        } else {
-            buf := bufio.NewReader(block)
-            // todo: writer.Header().Add("Content-Type", "application/???")
-            buf.WriteTo(writer)
-        }
-    }
+		if block == "" {
+			http.Error(writer, fmt.Sprintf("Block with id: %s does not belong to file with id: %s", block, file.Id), 404)
+		} else {
+			http.Redirect(writer, req, "/v1/block/"+string(block), http.StatusFound)
+		}
+	}
 }
 
 func paramFromRequest(key string, req *http.Request) string {

@@ -2,11 +2,13 @@ package fs
 
 import (
 	"fmt"
-	"github.com/google/cayley"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/google/cayley"
+	"github.com/sdcoffey/olympus/env"
+	"github.com/stretchr/testify/assert"
 )
 
 func testInit() {
@@ -242,52 +244,47 @@ func TestDelete_returnsErrorWhenNodeHasChildren(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestAddBlock_addsBlock(t *testing.T) {
+func TestWriteData_writesDataToCorrectBlock(t *testing.T) {
 	testInit()
 
+	os.Setenv("OLYMPUS_HOME", "test_home")
+	env.InitializeEnvironment()
+	defer os.RemoveAll("test_home")
+
 	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
-	block := BlockWithHash("abcd")
-	err := child.AddBlock(block, 0)
-	assert.Nil(t, err)
+	dat := RandDat(1024)
+	hash := Hash(dat)
+
+	err := child.WriteData(dat, 0)
+	assert.NoError(t, err)
 
 	blocks := child.Blocks()
 	assert.Len(t, blocks, 1)
-	assert.Equal(t, block.Hash, blocks[0].Hash)
-	assert.EqualValues(t, 0, blocks[0].Offset())
-}
-
-func TestRemoveBlock_removesBlock(t *testing.T) {
-	testInit()
-
-	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
-	block := BlockWithHash("abcd")
-	err := child.AddBlock(block, 0)
-	assert.Nil(t, err)
-
-	err = child.RemoveBlock(block)
-	assert.Nil(t, err)
-	assert.Len(t, child.Blocks(), 0)
+	if len(blocks) > 0 {
+		assert.Equal(t, hash, blocks[0].Hash)
+	}
 }
 
 func TestBlockWithOffset_findsCorrectBlock(t *testing.T) {
 	testInit()
+	os.Setenv("OLYMPUS_HOME", "test_home")
+	env.InitializeEnvironment()
+	defer os.RemoveAll("test_home")
 
 	child, _ := MkFile("child", rootNode.Id, MEGABYTE*2, time.Now())
-	block := BlockWithHash("abcd")
-	err := child.AddBlock(block, 0)
-	assert.Nil(t, err)
+	data := RandDat(MEGABYTE)
+	err := child.WriteData(data, 0)
+	assert.NoError(t, err)
 
-	block2 := BlockWithHash("efgh")
-	err = child.AddBlock(block2, MEGABYTE)
-	assert.Nil(t, err)
+	data2 := RandDat(MEGABYTE)
+	err = child.WriteData(data2, MEGABYTE)
+	assert.NoError(t, err)
 
 	foundBlock := child.BlockWithOffset(0)
-	assert.NotNil(t, foundBlock)
-	assert.EqualValues(t, 0, foundBlock.Offset())
+	assert.Equal(t, Hash(data), string(foundBlock))
 
 	foundBlock2 := child.BlockWithOffset(MEGABYTE)
-	assert.NotNil(t, foundBlock2)
-	assert.EqualValues(t, MEGABYTE, foundBlock2.Offset())
+	assert.Equal(t, Hash(data2), string(foundBlock2))
 }
 
 func TestBlock_returnsEmptySliceForDir(t *testing.T) {
