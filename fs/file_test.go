@@ -2,17 +2,15 @@ package fs
 
 import (
 	"fmt"
-	"github.com/google/cayley"
-	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"os"
 	"testing"
 	"time"
-)
 
-func testInit() {
-	graph, _ := cayley.NewMemoryGraph()
-	Init(graph)
-}
+	"github.com/google/cayley"
+	"github.com/sdcoffey/olympus/env"
+	"github.com/stretchr/testify/assert"
+)
 
 func TestNewFile_hasUuidAndTimeStamp(t *testing.T) {
 	testInit()
@@ -20,6 +18,42 @@ func TestNewFile_hasUuidAndTimeStamp(t *testing.T) {
 	file := newFile("root")
 	assert.NotEmpty(t, file.Id)
 	assert.NotEmpty(t, file.mTime)
+}
+
+func TestFileWithFileInfo(t *testing.T) {
+	testInit()
+
+	now := time.Now()
+	fileInfo := FileInfo{
+		Id:       "abc",
+		ParentId: "parent",
+		Name:     "file",
+		Size:     1,
+		MTime:    now,
+		Attr:     4,
+	}
+
+	file := FileWithFileInfo(fileInfo)
+	assert.Equal(t, "abc", file.Id)
+	assert.Equal(t, "parent", file.parentId)
+	assert.Equal(t, "file", file.name)
+	assert.EqualValues(t, 1, file.size)
+	assert.Equal(t, now, file.mTime)
+	assert.EqualValues(t, 4, file.mode)
+}
+
+func TestFileInfo(t *testing.T) {
+	testInit()
+
+	now := time.Now()
+	child, _ := MkFile("child", rootNode.Id, 1024, now)
+	info := child.FileInfo()
+	assert.Equal(t, child.Id, info.Id)
+	assert.Equal(t, "rootNode", info.ParentId)
+	assert.Equal(t, "child", info.Name)
+	assert.EqualValues(t, 1024, info.Size)
+	assert.Equal(t, now.Unix(), info.MTime.Unix())
+	assert.EqualValues(t, child.Mode(), info.Attr)
 }
 
 func TestFileWithName(t *testing.T) {
@@ -191,15 +225,21 @@ func TestSave_overwriteExistingProperty(t *testing.T) {
 	testInit()
 
 	file := newFile("root")
-	file.mode |= os.ModeDir
+	file.mode = 6
+	file.size = 1024
 
 	err := file.Save()
 	assert.Nil(t, err)
 
 	file.name = "root2"
+	file.size = 1025
+	file.mode = 7
+
 	err = file.Save()
 	assert.Nil(t, err)
 	assert.Equal(t, "root2", file.Name())
+	assert.EqualValues(t, 1025, file.Size())
+	assert.EqualValues(t, 7, file.Mode())
 }
 
 func TestSave_returnsErrorWhenFileHasNoName(t *testing.T) {
@@ -213,7 +253,13 @@ func TestSave_returnsErrorWhenFileHasNoName(t *testing.T) {
 func TestDelete(t *testing.T) {
 	testInit()
 
-	file, _ := RootNode()
+	file := newFile("child")
+	file.parentId = rootNode.Id
+	file.size = 1024
+	file.mode = 4
+	file.mTime = time.Now()
+
+	file.Save()
 
 	err := file.delete()
 	assert.Nil(t, err)
@@ -242,55 +288,93 @@ func TestDelete_returnsErrorWhenNodeHasChildren(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestAddBlock_addsBlock(t *testing.T) {
+func TestWriteData_writesDataToCorrectBlock(t *testing.T) {
 	testInit()
 
 	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
-	block := BlockWithHash("abcd")
-	err := child.AddBlock(block, 0)
-	assert.Nil(t, err)
+	dat := RandDat(1024)
+	fingerprint := Hash(dat)
+
+	err := child.WriteData(dat, 0)
+	assert.NoError(t, err)
 
 	blocks := child.Blocks()
 	assert.Len(t, blocks, 1)
-	assert.Equal(t, block.Hash, blocks[0].Hash)
-	assert.EqualValues(t, 0, blocks[0].Offset())
+	if len(blocks) > 0 {
+		assert.Equal(t, fingerprint, blocks[0].Hash)
+	}
 }
 
-func TestRemoveBlock_removesBlock(t *testing.T) {
+func TestWriteData_throwsOnInvalidBlockOffset(t *testing.T) {
 	testInit()
 
 	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
-	block := BlockWithHash("abcd")
-	err := child.AddBlock(block, 0)
-	assert.Nil(t, err)
+	dat := RandDat(1024)
 
-	err = child.RemoveBlock(block)
-	assert.Nil(t, err)
-	assert.Len(t, child.Blocks(), 0)
+	err := child.WriteData(dat, 1)
+	assert.Error(t, err)
+	assert.Equal(t, fmt.Sprint("1 is not a valid offset for block size ", BLOCK_SIZE), err.Error())
+}
+
+func TestWriteData_throwsIfDataGreaterThanSize(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
+	dat := RandDat(1025)
+
+	err := child.WriteData(dat, 0)
+	assert.Error(t, err)
+	assert.Equal(t, "Cannot write data that exceeds the size of file", err.Error())
+}
+
+func TestWriteData_removesExistingFingerprintForOffset(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
+	dat := RandDat(1024)
+
+	err := child.WriteData(dat, 0)
+	assert.NoError(t, err)
+
+	dat = RandDat(1024)
+	fingerprint := Hash(dat)
+	err = child.WriteData(dat, 0)
+
+	it := cayley.StartPath(GlobalFs(), child.Id).Out("offset-0").BuildIterator()
+	assert.True(t, cayley.RawNext(it))
+	assert.Equal(t, fingerprint, GlobalFs().NameOf(it.Result()))
 }
 
 func TestBlockWithOffset_findsCorrectBlock(t *testing.T) {
 	testInit()
 
 	child, _ := MkFile("child", rootNode.Id, MEGABYTE*2, time.Now())
-	block := BlockWithHash("abcd")
-	err := child.AddBlock(block, 0)
-	assert.Nil(t, err)
+	data := RandDat(MEGABYTE)
+	err := child.WriteData(data, 0)
+	assert.NoError(t, err)
 
-	block2 := BlockWithHash("efgh")
-	err = child.AddBlock(block2, MEGABYTE)
-	assert.Nil(t, err)
+	data2 := RandDat(MEGABYTE)
+	err = child.WriteData(data2, MEGABYTE)
+	assert.NoError(t, err)
 
 	foundBlock := child.BlockWithOffset(0)
-	assert.NotNil(t, foundBlock)
-	assert.EqualValues(t, 0, foundBlock.Offset())
+	assert.Equal(t, Hash(data), string(foundBlock))
 
 	foundBlock2 := child.BlockWithOffset(MEGABYTE)
-	assert.NotNil(t, foundBlock2)
-	assert.EqualValues(t, MEGABYTE, foundBlock2.Offset())
+	assert.Equal(t, Hash(data2), string(foundBlock2))
 }
 
-func TestBlock_returnsEmptySliceForDir(t *testing.T) {
+func TestBlockWithOffset_returnsEmptyStringForDir(t *testing.T) {
+	testInit()
+
+	child, err := rootNode.MkDir("child")
+	assert.NoError(t, err)
+
+	fingerprint := child.BlockWithOffset(0)
+	assert.Equal(t, "", fingerprint)
+}
+
+func TestBlocks_returnsEmptySliceForDir(t *testing.T) {
 	testInit()
 
 	blocks := rootNode.Blocks()
@@ -307,5 +391,20 @@ func BenchmarkWrite(b *testing.B) {
 		file.mode = os.ModeDir
 		file.parentId = lastId
 		err = file.Save()
+	}
+}
+
+func testInit() string {
+	if dir, err := ioutil.TempDir(os.TempDir(), ".olympus"); err != nil {
+		panic(err)
+	} else {
+		os.Setenv("OLYMPUS_HOME", dir)
+		if err = env.InitializeEnvironment(); err != nil {
+			panic(err)
+		}
+		graph, _ := cayley.NewMemoryGraph()
+		Init(graph)
+
+		return dir
 	}
 }

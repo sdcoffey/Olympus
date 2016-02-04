@@ -17,7 +17,6 @@ const (
 	nameLink   = "isNamed"
 	modeLink   = "modeLink"
 	mTimeLink  = "hasMTime"
-	blockLink  = "hasBlock"
 )
 
 type NTree interface {
@@ -166,56 +165,70 @@ func (of *OFile) Children() []*OFile {
 	return children
 }
 
-func (of *OFile) Blocks() []*OFileBlock {
+func (of *OFile) BlockWithOffset(offset int64) string {
 	if of.IsDir() {
-		return make([]*OFileBlock, 0)
+		return ""
 	}
 
-	it := cayley.StartPath(GlobalFs(), of.Id).Out(blockLink).BuildIterator()
-	maxBlocks := of.Size() / BLOCK_SIZE
+	it := cayley.StartPath(GlobalFs(), of.Id).Out(fmt.Sprint("offset-", offset)).BuildIterator()
+	if cayley.RawNext(it) {
+		return GlobalFs().NameOf(it.Result())
+	} else {
+		return ""
+	}
+}
+
+func (of *OFile) Blocks() []BlockInfo {
+	if of.IsDir() {
+		return make([]BlockInfo, 0)
+	}
+
+	blockCap := of.Size() / BLOCK_SIZE
 	if of.Size()%BLOCK_SIZE > 0 {
-		maxBlocks++
+		blockCap++
 	}
 
-	blocks := make([]*OFileBlock, 0, maxBlocks)
-	for cayley.RawNext(it) {
-		blocks = append(blocks, BlockWithHash(GlobalFs().NameOf(it.Result())))
+	blocks := make([]BlockInfo, 0, blockCap)
+	var i int64
+	for i = 0; i < of.Size(); i += BLOCK_SIZE {
+		it := cayley.StartPath(GlobalFs(), of.Id).Out(fmt.Sprint("offset-", i)).BuildIterator()
+		for cayley.RawNext(it) {
+			info := BlockInfo{
+				Hash:   GlobalFs().NameOf(it.Result()),
+				Offset: i,
+			}
+			blocks = append(blocks, info)
+		}
 	}
 
 	return blocks
 }
 
-func (of *OFile) BlockWithOffset(offset int64) *OFileBlock {
-	if of.IsDir() {
-		return nil
+func (of *OFile) WriteData(data []byte, offset int64) error {
+	if offset%BLOCK_SIZE != 0 {
+		return errors.New(fmt.Sprintf("%d is not a valid offset for block size %d", offset, BLOCK_SIZE))
+	} else if int64(len(data)) > of.Size() {
+		return errors.New("Cannot write data that exceeds the size of file")
 	}
 
-	filePath := cayley.StartPath(GlobalFs(), of.Id).Out(blockLink)
-	filePath.And(cayley.StartPath(GlobalFs(), fmt.Sprint(offset)).In(offsetLink))
+	hash := Hash(data)
+	transaction := graph.NewTransaction()
 
-	it := filePath.BuildIterator()
-	if cayley.RawNext(it) {
-		return BlockWithHash(GlobalFs().NameOf(it.Result()))
+	// Determine if we already have a block for this offset
+	if existingBlockHash := of.BlockWithOffset(offset); existingBlockHash != "" {
+		transaction.RemoveQuad(cayley.Quad(of.Id, fmt.Sprint("offset-", offset), string(existingBlockHash), ""))
+	}
+	transaction.AddQuad(cayley.Quad(of.Id, fmt.Sprint("offset-", offset), hash, ""))
+
+	if err := GlobalFs().ApplyTransaction(transaction); err != nil {
+		return err
 	}
 
-	return nil
-}
-
-func (of *OFile) AddBlock(block *OFileBlock, offset int64) error {
-	block.offset = offset
-	if err := block.Save(); err == nil {
-		if err = GlobalFs().QuadWriter.AddQuad(cayley.Quad(of.Id, blockLink, block.Hash, "")); err != nil {
-			return err
-		}
-	} else {
+	if _, err := Write(hash, data); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (of *OFile) RemoveBlock(block *OFileBlock) error {
-	return GlobalFs().RemoveQuad(cayley.Quad(of.Id, blockLink, block.Hash, ""))
 }
 
 // interface GraphWriter

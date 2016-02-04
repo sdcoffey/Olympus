@@ -127,12 +127,3 @@ func (of *OFile) Resize(size int64) error {
 	of.size = size
 	return of.Save()
 }
-
-func (of *OFile) Traverse(callback func(*OFile) bool) {
-	for _, file := range of.Children() {
-		if keepGoing := callback(file); !keepGoing {
-			return
-		}
-		file.Traverse(callback)
-	}
-}

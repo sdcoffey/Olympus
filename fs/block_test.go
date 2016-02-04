@@ -1,99 +1,40 @@
 package fs
 
 import (
-	"github.com/google/cayley"
-	"github.com/sdcoffey/olympus/env"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/rand"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sdcoffey/olympus/env"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestBlockWithHash(t *testing.T) {
+func TestReader_returnsCorrectReader(t *testing.T) {
 	testInit()
-
-	block := BlockWithHash("abcd")
-	assert.Equal(t, "abcd", block.Hash)
-	assert.EqualValues(t, -1, block.Offset())
-}
-
-func TestRead_readsData(t *testing.T) {
-	testInit()
-
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
 
 	dat := RandDat(1024)
-	block := BlockWithHash(blockHash(dat))
+	blockFingerprint := Hash(dat)
 
-	path := filepath.Join(env.EnvPath(env.DataPath), block.Hash)
-	err := ioutil.WriteFile(path, dat, 0700)
-	assert.Nil(t, err)
+	path := filepath.Join(env.EnvPath(env.DataPath), blockFingerprint)
+	err := ioutil.WriteFile(path, []byte(dat), 0644)
+	assert.NoError(t, err)
 
-	readDat, err := block.Read()
-	assert.Nil(t, err)
-	assert.Equal(t, dat, readDat)
-}
+	reader, err := Reader(blockFingerprint)
+	assert.NoError(t, err)
 
-func TestSave_savesBlock(t *testing.T) {
-	testInit()
+	readDat, err := ioutil.ReadAll(reader)
+	assert.NoError(t, err)
 
-	block := BlockWithHash("abcd")
-	block.offset = 0
-
-	err := block.Save()
-	assert.Nil(t, err)
-
-	it := cayley.StartPath(GlobalFs(), block.Hash).Out(offsetLink).BuildIterator()
-	assert.True(t, cayley.RawNext(it))
-	assert.Equal(t, "0", GlobalFs().NameOf(it.Result()))
-}
-
-func TestSave_throwsOnBadOffset(t *testing.T) {
-	testInit()
-
-	block := BlockWithHash("abcd")
-	block.offset = 1
-
-	err := block.Save()
-	assert.NotNil(t, err)
-}
-
-func TestSave_throwsWhenNoOffsetSet(t *testing.T) {
-	testInit()
-
-	block := BlockWithHash("abcd")
-	block.offset = -MEGABYTE
-
-	err := block.Save()
-	assert.NotNil(t, err)
-}
-
-func TestOffset_returnsNegativeWhenNotSet(t *testing.T) {
-	testInit()
-
-	block := BlockWithHash("abcd")
-	assert.EqualValues(t, -1, block.Offset())
-}
-
-func TestOffset_returnsOffsetWhenSet(t *testing.T) {
-	testInit()
-
-	block := BlockWithHash("abcd")
-	block.offset = 0
-	block.Save()
-
-	assert.EqualValues(t, 0, block.Offset())
+	assert.Equal(t, []byte(dat), readDat)
+	assert.EqualValues(t, len(dat), len(readDat))
 }
 
 func TestHash(t *testing.T) {
 	testInit()
 
-	dat := RandDat(1024 * 1024)
-	fingerprint := blockHash(dat)
+	dat := (RandDat(MEGABYTE))
+	fingerprint := Hash(dat)
 	assert.NotEmpty(t, fingerprint)
 }
 
@@ -107,63 +48,97 @@ func TestHash_similarDataHashesDifferently(t *testing.T) {
 	index := (len(dat2) / 5) * 2
 	dat2[index] = byte(int(dat2[index]) + 1)
 
-	fingerprint1 := blockHash(dat1)
-	fingerprint2 := blockHash(dat2)
+	fingerprint1 := Hash(dat1)
+	fingerprint2 := Hash(dat2)
 
 	assert.NotEqual(t, fingerprint1, fingerprint2)
 }
 
-func TestWrite_writesData(t *testing.T) {
+func TestWriteData_writesData(t *testing.T) {
 	testInit()
 
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
-
 	dat := RandDat(MEGABYTE)
-	block := BlockWithHash(blockHash(dat))
+	fingerprint := Hash(dat)
 
-	n, err := block.Write(dat)
+	n, err := Write(fingerprint, dat)
 	assert.EqualValues(t, MEGABYTE, n)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
+
+	reader, err := Reader(fingerprint)
+	assert.NoError(t, err)
+
+	readDat, err := ioutil.ReadAll(reader)
+	assert.NoError(t, err)
+
+	assert.Equal(t, dat, readDat)
 }
 
 func TestWrite_throwsIfWrongHash(t *testing.T) {
 	testInit()
 
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
-
 	dat := RandDat(MEGABYTE)
-	block := BlockWithHash("abcd")
+	fingerprint := "abcd"
 
-	n, err := block.Write(dat)
+	n, err := Write(fingerprint, dat)
+	assert.Error(t, err)
 	assert.EqualValues(t, 0, n)
-	assert.NotNil(t, err)
 }
 
 func TestWrite_throwsIfBadSize(t *testing.T) {
 	testInit()
 
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
-
 	dat := RandDat(MEGABYTE + 1)
-	block := BlockWithHash(blockHash(dat))
+	fingerprint := Hash(dat)
 
-	n, err := block.Write(dat)
-	assert.EqualValues(t, 0, n)
-	assert.NotNil(t, err)
+	n, err := Write(fingerprint, dat)
+	assert.Equal(t, 0, n)
+	assert.Error(t, err)
+}
+
+func TestSizeOnDisk_returnsCorrectSizeForHash(t *testing.T) {
+	testInit()
+
+	dat := RandDat(1024)
+	fingerprint := Hash(dat)
+
+	_, err := Write(fingerprint, dat)
+	assert.NoError(t, err)
+
+	size, err := SizeOnDisk(fingerprint)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 1024, size)
+}
+
+func TestSizeOnDisk_throwsForBadFingerprint(t *testing.T) {
+	testInit()
+
+	fingerprint := "abcd"
+	size, err := SizeOnDisk(fingerprint)
+	assert.EqualValues(t, 0, size)
+	assert.Error(t, err)
+}
+
+func TestLocationOnDisk_returnsCorrectLocationForFingerprint(t *testing.T) {
+	baseLocation := testInit()
+
+	dat := RandDat(1024)
+	fingerprint := Hash(dat)
+
+	_, err := Write(fingerprint, dat)
+	assert.NoError(t, err)
+
+	location := LocationOnDisk(fingerprint)
+
+	expectedLocation := filepath.Join(baseLocation, filepath.Join("dat", fingerprint))
+	assert.Equal(t, expectedLocation, location)
 }
 
 func BenchmarkBlockHash(b *testing.B) {
-	dat := RandDat(1024 * 1024)
+	dat := RandDat(MEGABYTE)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		blockHash(dat)
+		Hash(dat)
 	}
 }
 

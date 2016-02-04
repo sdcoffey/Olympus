@@ -1,16 +1,16 @@
 package fs
 
 import (
+	"bytes"
 	"crypto"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"github.com/google/cayley"
-	"github.com/sdcoffey/olympus/env"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
-	"strconv"
+	"syscall"
+
+	"github.com/sdcoffey/olympus/env"
 )
 
 const (
@@ -21,100 +21,54 @@ const (
 	TERABYTE = 1024 * GIGABYTE
 
 	BLOCK_SIZE = MEGABYTE
-
-	offsetLink = "hashOffset"
 )
 
-type OFileBlock struct {
-	Hash   string
-	offset int64
+func Hash(d []byte) string {
+	sha := crypto.SHA1.New()
+	sha.Write(d)
+	return hex.EncodeToString(sha.Sum(nil))
 }
 
-func BlockWithHash(hash string) *OFileBlock {
-	return &OFileBlock{Hash: hash, offset: -1}
+func Reader(hash string) (io.Reader, error) {
+	return backingFile(hash)
 }
 
-func (ofb *OFileBlock) Read(p []byte) (int, error) {
-	if backingFile, err := os.Open(ofb.LocationOnDisk()); err != nil {
+func Write(hash string, d []byte) (int, error) {
+	dataHash := Hash(d)
+	if len(d) > BLOCK_SIZE {
+		return 0, errors.New("Data length exceeds max block size")
+	} else if dataHash != hash {
+		return 0, errors.New("Data has does not match this blocks hash")
+	}
+
+	if file, err := os.OpenFile(LocationOnDisk(hash), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(0644)); err != nil {
 		return 0, err
 	} else {
-		return backingFile.Read(p)
+		syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
+		defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+
+		buf := bytes.NewBuffer([]byte(d))
+		n, err := io.Copy(file, buf)
+		return int(n), err
 	}
 }
 
-func (ofb *OFileBlock) Save() (err error) {
-	if ofb.offset%BLOCK_SIZE != 0 {
-		return errors.New(fmt.Sprint("Block has invalid offset ", ofb.offset))
-	} else if ofb.offset < 0 {
-		return errors.New("Cannot add block without offset")
-	}
-
-	staleQuads := cayley.NewTransaction()
-	newQuads := cayley.NewTransaction()
-
-	if ofb.Offset() > 0 && ofb.offset != ofb.Offset() {
-		staleQuads.RemoveQuad(cayley.Quad(ofb.Hash, offsetLink, fmt.Sprint(ofb.Offset()), ""))
-	}
-	newQuads.AddQuad(cayley.Quad(ofb.Hash, offsetLink, fmt.Sprint(ofb.offset), ""))
-
-	if err = GlobalFs().ApplyTransaction(staleQuads); err != nil {
-		return
-	} else if err = GlobalFs().ApplyTransaction(newQuads); err != nil {
-		return
-	}
-
-	return nil
-}
-
-// Assume that we're writing one block.
-// Clients will be responsible for parting files, but we'll validate the hash here
-func (ofb *OFileBlock) Write(bytes []byte) (n int, err error) {
-	if hash := blockHash(bytes); hash != ofb.Hash {
-		return 0, errors.New(fmt.Sprint("Block with hash ", hash, " does not match this block's hash"))
-	} else if len(bytes) > BLOCK_SIZE {
-		return 0, errors.New(fmt.Sprint("Block exceeds max block size by ", (len(bytes) - BLOCK_SIZE)))
-	}
-
-	filename := filepath.Join(env.EnvPath(env.DataPath), ofb.Hash)
-	if err = ioutil.WriteFile(filename, bytes, 700); err != nil {
-		return
-	} else {
-		n = len(bytes)
-	}
-
-	return
-}
-
-func (ofb *OFileBlock) Offset() int64 {
-	it := cayley.StartPath(GlobalFs(), ofb.Hash).Out(offsetLink).BuildIterator()
-	if cayley.RawNext(it) {
-		if val, err := strconv.ParseInt(GlobalFs().NameOf(it.Result()), 10, 64); err == nil {
-			return val
-		}
-	}
-
-	return -1
-}
-
-func (ofb *OFileBlock) SizeOnDisk() (int64, error) {
-	if fi, err := os.Stat(ofb.LocationOnDisk()); err != nil {
+func SizeOnDisk(hash string) (int64, error) {
+	if fi, err := os.Stat(LocationOnDisk(hash)); err != nil {
 		return 0, err
 	} else {
 		return fi.Size(), nil
 	}
 }
 
-func (ofb *OFileBlock) LocationOnDisk() string {
-	return filepath.Join(env.EnvPath(env.DataPath), ofb.Hash)
+func LocationOnDisk(hash string) string {
+	return filepath.Join(env.EnvPath(env.DataPath), hash)
 }
 
-func (ofb *OFileBlock) IsOnDisk() bool {
-	filename := filepath.Join(env.EnvPath(env.DataPath), ofb.Hash)
-	return env.Exists(filename)
-}
-
-func blockHash(data []byte) string {
-	sha := crypto.SHA1.New()
-	sha.Write(data)
-	return hex.EncodeToString(sha.Sum(nil))
+func backingFile(hash string) (*os.File, error) {
+	if backingFile, err := os.Open(LocationOnDisk(hash)); err != nil {
+		return nil, err
+	} else {
+		return backingFile, nil
+	}
 }

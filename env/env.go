@@ -23,19 +23,20 @@ func InitializeEnvironment() (err error) {
 	}
 
 	mkdir := func(dirpath string) {
-		if err != nil {
+		if err != nil || Exists(dirpath) {
 			return
 		}
-		err = os.Mkdir(dirpath, 0777)
+		err = os.Mkdir(dirpath, 0744)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	if !Exists(home) {
-		mkdir(home)
-		mkdir(filepath.Join(home, string(DataPath)))
-		mkdir(filepath.Join(home, string(LogPath)))
-		mkdir(filepath.Join(home, string(DbPath)))
-		mkdir(filepath.Join(home, string(ConfigPath)))
-	}
+	mkdir(home)
+	mkdir(filepath.Join(home, string(DataPath)))
+	mkdir(filepath.Join(home, string(LogPath)))
+	mkdir(filepath.Join(home, string(DbPath)))
+	mkdir(filepath.Join(home, string(ConfigPath)))
 
 	return
 }
