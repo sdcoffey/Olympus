@@ -1,11 +1,12 @@
 package fs
 
 import (
-	"github.com/google/cayley"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/google/cayley"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMkDir(t *testing.T) {

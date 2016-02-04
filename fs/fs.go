@@ -3,9 +3,10 @@ package fs
 import (
 	"errors"
 	"fmt"
-	"github.com/google/cayley"
 	"os"
 	"time"
+
+	"github.com/google/cayley"
 )
 
 var globalFs *Fs

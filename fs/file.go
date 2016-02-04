@@ -1,14 +1,15 @@
 package fs
 
 import (
-	"code.google.com/p/go-uuid/uuid"
 	"errors"
 	"fmt"
-	"github.com/google/cayley"
-	"github.com/google/cayley/graph"
 	"os"
 	"strconv"
 	"time"
+
+	"code.google.com/p/go-uuid/uuid"
+	"github.com/google/cayley"
+	"github.com/google/cayley/graph"
 )
 
 const (

@@ -2,9 +2,10 @@ package peer
 
 import (
 	"fmt"
-	"github.com/sdcoffey/olympus/fs"
 	"net"
 	"time"
+
+	"github.com/sdcoffey/olympus/fs"
 )
 
 const (

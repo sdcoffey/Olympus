@@ -4,14 +4,15 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/google/cayley"
-	"github.com/sdcoffey/olympus/fs"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/google/cayley"
+	"github.com/sdcoffey/olympus/fs"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEncoderFromHeader_returnsCorrectEncoder(t *testing.T) {

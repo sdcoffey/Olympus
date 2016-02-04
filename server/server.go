@@ -1,6 +1,10 @@
 package main
 
 import (
+	"net/http"
+	"os"
+	"path/filepath"
+
 	"github.com/google/cayley"
 	"github.com/google/cayley/graph"
 	_ "github.com/google/cayley/graph/bolt"
@@ -8,9 +12,6 @@ import (
 	"github.com/sdcoffey/olympus/fs"
 	"github.com/sdcoffey/olympus/peer"
 	"github.com/sdcoffey/olympus/server/api"
-	"net/http"
-	"os"
-	"path/filepath"
 )
 
 var debug = false

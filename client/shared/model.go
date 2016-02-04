@@ -3,6 +3,7 @@ package shared
 import (
 	"errors"
 	"fmt"
+
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/fs"
 )

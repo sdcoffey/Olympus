@@ -5,10 +5,11 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/sdcoffey/olympus/fs"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/sdcoffey/olympus/fs"
 )
 
 type OlympusClient interface {

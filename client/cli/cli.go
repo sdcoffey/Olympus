@@ -5,12 +5,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/client/shared"
 	"github.com/sdcoffey/olympus/peer"
-	"os"
-	"strings"
 )
 
 type Command func(string, []string, *shared.OManager) (string, error)

@@ -1,11 +1,12 @@
 package env
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/user"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {

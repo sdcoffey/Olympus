@@ -1,16 +1,17 @@
 package shared
 
 import (
-	"code.google.com/p/go-uuid/uuid"
 	"errors"
 	"fmt"
-	"github.com/google/cayley"
-	"github.com/sdcoffey/olympus/fs"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"testing"
 	"time"
+
+	"code.google.com/p/go-uuid/uuid"
+	"github.com/google/cayley"
+	"github.com/sdcoffey/olympus/fs"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
