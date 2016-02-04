@@ -12,8 +12,8 @@ clean:
 
 build: test
 	@mkdir -p build/executables
-	go build -o build/executables/server sdcoffey/olympus/server
-	go build -o build/executables/cli/cli github.com/sdcoffey/olympus/client/cli
+	go build -o build/executables/server github.com/sdcoffey/olympus/server
+	go build -o build/executables/cli github.com/sdcoffey/olympus/client/cli
 
 test: clean
 	go test -v ./...
@@ -23,11 +23,6 @@ cover:
 		go tool cover -html=build/cover/$name.out -o=build/cover/html/$name.html
 	done
 
-cover: clean
-	@mkdir -p build/cover
-	@mkdir -p build/cover/html
-	@for package in $(pkgs); do \
-		echo $$package \
-		name=basename $$package \
-	done
+testcover: clean
+	go test -cover ./...
 
