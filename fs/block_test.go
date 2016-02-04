@@ -3,7 +3,6 @@ package fs
 import (
 	"io/ioutil"
 	"math/rand"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,10 +12,6 @@ import (
 
 func TestReader_returnsCorrectReader(t *testing.T) {
 	testInit()
-
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
 
 	dat := RandDat(1024)
 	blockFingerprint := Hash(dat)
@@ -62,10 +57,6 @@ func TestHash_similarDataHashesDifferently(t *testing.T) {
 func TestWriteData_writesData(t *testing.T) {
 	testInit()
 
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
-
 	dat := RandDat(MEGABYTE)
 	fingerprint := Hash(dat)
 
@@ -85,10 +76,6 @@ func TestWriteData_writesData(t *testing.T) {
 func TestWrite_throwsIfWrongHash(t *testing.T) {
 	testInit()
 
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
-
 	dat := RandDat(MEGABYTE)
 	fingerprint := "abcd"
 
@@ -100,16 +87,50 @@ func TestWrite_throwsIfWrongHash(t *testing.T) {
 func TestWrite_throwsIfBadSize(t *testing.T) {
 	testInit()
 
-	os.Setenv("OLYMPUS_HOME", "test_home")
-	env.InitializeEnvironment()
-	defer os.RemoveAll("test_home")
-
 	dat := RandDat(MEGABYTE + 1)
 	fingerprint := Hash(dat)
 
 	n, err := Write(fingerprint, dat)
 	assert.Equal(t, 0, n)
 	assert.Error(t, err)
+}
+
+func TestSizeOnDisk_returnsCorrectSizeForHash(t *testing.T) {
+	testInit()
+
+	dat := RandDat(1024)
+	fingerprint := Hash(dat)
+
+	_, err := Write(fingerprint, dat)
+	assert.NoError(t, err)
+
+	size, err := SizeOnDisk(fingerprint)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 1024, size)
+}
+
+func TestSizeOnDisk_throwsForBadFingerprint(t *testing.T) {
+	testInit()
+
+	fingerprint := "abcd"
+	size, err := SizeOnDisk(fingerprint)
+	assert.EqualValues(t, 0, size)
+	assert.Error(t, err)
+}
+
+func TestLocationOnDisk_returnsCorrectLocationForFingerprint(t *testing.T) {
+	baseLocation := testInit()
+
+	dat := RandDat(1024)
+	fingerprint := Hash(dat)
+
+	_, err := Write(fingerprint, dat)
+	assert.NoError(t, err)
+
+	location := LocationOnDisk(fingerprint)
+
+	expectedLocation := filepath.Join(baseLocation, filepath.Join("dat", fingerprint))
+	assert.Equal(t, expectedLocation, location)
 }
 
 func BenchmarkBlockHash(b *testing.B) {

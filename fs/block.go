@@ -65,10 +65,6 @@ func LocationOnDisk(hash string) string {
 	return filepath.Join(env.EnvPath(env.DataPath), hash)
 }
 
-func IsOnDisk(hash string) bool {
-	return env.Exists(LocationOnDisk(hash))
-}
-
 func backingFile(hash string) (*os.File, error) {
 	if backingFile, err := os.Open(LocationOnDisk(hash)); err != nil {
 		return nil, err

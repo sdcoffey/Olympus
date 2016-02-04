@@ -233,3 +233,14 @@ func TestTouch_throwsIfDateInFuture(t *testing.T) {
 	err := child.Touch(time.Now().Add(1 * time.Microsecond))
 	assert.NotNil(t, err)
 }
+
+func TestResize_resizesCorrectly(t *testing.T) {
+	testInit()
+
+	child, _ := MkFile("child", rootNode.Id, 1024, time.Now())
+	assert.EqualValues(t, 1024, child.Size())
+
+	err := child.Resize(1025)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 1025, child.Size())
+}
