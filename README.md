@@ -29,3 +29,12 @@ And to install Olympus cli:
 $ make && make install-cli
 $ olympus-cli # To run the client
 ```
+
+Data and config files are, by default, stored in a the current users's home directory under `.olympus/`. To specify an alternative location, set the environment variable `OLYMPUS_HOME` to another path before installing.
+
+## Coming Soon
+ - Mobile and Web clients
+ - File streaming API
+ - HTTP/2 Support
+ - Expanded runtime configuration options
+ - Support for remote instances
