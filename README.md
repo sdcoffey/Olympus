@@ -1,7 +1,7 @@
 
 <p align="center"><img src="http://i.imgur.com/160ZjLq.png"></p>
 
-Olympus is a personal storage platform, written in pure Go, using the graph database [Cayley](https://github.com/google/cayley) as its metadata store. It offers de-duplication by storing data in 1Mb chunks, and associating the hashes of those chunks with files in the graph. Olympus is architected for speed and simplicity, with a simple api inspired by Unix filesystem commands. 
+Olympus is a personal storage platform, written in pure Go, using the graph database [Cayley](https://github.com/google/cayley) as its metadata store. It supports de-duplication by storing data in 1Mb chunks, and associating the hashes of those chunks with files in the graph. Olympus is architected for speed and simplicity, with a simple API inspired by Unix filesystem commands. 
 
 Olympus makes use of a monorepo structure for maximum code reuse. Client and server code use the same model objects, and communicate with each other using Go's wire encoding format, [gob](https://golang.org/pkg/encoding/gob/).
 
@@ -20,7 +20,7 @@ $ make test # Or make testcover for test coverage
 
 To install Olympus server:
 ```sh
-$ make && make install # Installs and runs the server daemon to /usr/local/bin
+$ make && make install # Installs Olympus to /usr/local/bin and rus it as daemon
 ```
 
 
