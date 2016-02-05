@@ -5,24 +5,25 @@ all: build
 
 clean:
 	@rm -rf build
-	go fmt ./...
+	@go fmt ./...
 	@for package in $(pkgs); do \
 		goimports -w ./$$package ; \
 	done
 
 build: test
 	@mkdir -p build/executables
-	go build -o build/executables/server github.com/sdcoffey/olympus/server
-	go build -o build/executables/cli github.com/sdcoffey/olympus/client/cli
+	@go build -x -o build/executables/server github.com/sdcoffey/olympus/server
+	@go build -x -o build/executables/cli github.com/sdcoffey/olympus/client/cli
+
+install:
+	cp build/executables/server /usr/local/bin/olympus
+
+install-cli:
+	cp build/executables/cli /usr/local/bin/olympus-cli
 
 test: clean
-	go test -v ./...
-
-cover:
-		go test -coverprofile=build/cover/$name.out ./$$package
-		go tool cover -html=build/cover/$name.out -o=build/cover/html/$name.html
-	done
+	@go test -v ./...
 
 testcover: clean
-	go test -cover ./...
+	@go test -cover ./...
 
