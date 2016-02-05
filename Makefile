@@ -16,6 +16,7 @@ build: clean
 	@go build -x -o build/executables/cli github.com/sdcoffey/olympus/client/cli
 
 install:
+	@ps aux | grep [o]lympus | awk '{print $$2}' | xargs kill -9
 	cp build/executables/server /usr/local/bin/olympus
 	@olympus&
 
