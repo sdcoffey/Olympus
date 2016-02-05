@@ -17,6 +17,7 @@ build: test
 
 install:
 	cp build/executables/server /usr/local/bin/olympus
+	@olympus&
 
 install-cli:
 	cp build/executables/cli /usr/local/bin/olympus-cli
