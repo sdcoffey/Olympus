@@ -10,7 +10,7 @@ clean:
 		goimports -w ./$$package ; \
 	done
 
-build: test
+build: clean
 	@mkdir -p build/executables
 	@go build -x -o build/executables/server github.com/sdcoffey/olympus/server
 	@go build -x -o build/executables/cli github.com/sdcoffey/olympus/client/cli
