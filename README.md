@@ -1,5 +1,5 @@
 
-<p align="center"><img src="http://i.imgur.com/6ETS8m5.png"></p>
+<p align="center"><img src="http://i.imgur.com/160ZjLq.png"></p>
 
 Olympus is a personal storage platform, written in pure Go, using the graph database [Cayley](https://github.com/google/cayley) as its metadata store. It offers de-duplication by storing data in 1Mb chunks, and associating the hashes of those chunks with files in the graph. Olympus is architected for speed and simplicity, with a simple api inspired by Unix filesystem commands. 
 
