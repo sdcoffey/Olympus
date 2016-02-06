@@ -3,6 +3,7 @@ package shared
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/fs"
@@ -73,4 +74,33 @@ func (model *OModel) FindFileByName(name string) *fs.OFile {
 	} else {
 		return file
 	}
+}
+
+func (model *OModel) FindFileByPath(path string) *fs.OFile {
+	path = model.absPath(path)
+
+	return nil
+}
+
+// Takes a path relative to this model, e.g. "../path/to/file, and constructs a absolute path
+// from it => /data/one/path/to/file
+func (model *OModel) absPath(path string) string {
+	if len(path) == 0 {
+		return path
+	} else if string(path[0]) == "/" {
+		return path
+	}
+
+	leaves := filepath.SplitList(path)
+	curnode := model.Root
+	path = "/"
+	for _, leaf := range leaves {
+		if leaf == ".." && curnode.Parent() != nil {
+			curnode = curnode.Parent()
+		} else {
+			curnode := fs.FileWithName(curnode.Id, leaf)
+			path = filepath.Join(path, curnode.Name())
+		}
+	}
+	return path
 }

@@ -8,7 +8,7 @@ type FileInfo struct {
 	Name     string
 	Size     int64
 	MTime    time.Time
-	Attr     int64
+	Mode     uint32
 }
 
 type BlockInfo struct {

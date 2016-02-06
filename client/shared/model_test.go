@@ -99,13 +99,54 @@ func TestModel_findFileByNameReturnsCorrectFile(t *testing.T) {
 		apiClient.AddFile(info)
 	}
 
-	err := model.Init()
-	assert.Nil(t, err)
+	assert.NoError(t, model.Init())
 
 	file := model.FindFileByName("1")
 	assert.Equal(t, fs.RootNodeId, file.Parent().Id)
 	assert.EqualValues(t, 0, file.Size())
 }
+
+func TestModel_absPathReturnsCorrectPathForPathWithUpDir(t *testing.T) {
+	assert.Nil(t, resetMemCache())
+	apiClient := newFakeApiClient()
+
+	file1 := fs.FileInfo{
+		Id:       "abcd",
+		Name:     "A",
+		ParentId: fs.RootNodeId,
+		Attr:     int64(os.ModeDir),
+	}
+	file2 := fs.FileInfo{
+		Id:       "efgh",
+		Name:     "B",
+		ParentId: "abcd",
+		Attr:     0,
+	}
+	file3 := fs.FileInfo{
+		Id:       "ijkl",
+		Name:     "C",
+		ParentId: "abcd",
+		Attr:     0,
+	}
+	assert.NoError(t, apiClient.AddFile(file1))
+	assert.NoError(t, apiClient.AddFile(file2))
+	assert.NoError(t, apiClient.AddFile(file3))
+
+	rootModel := newModel(apiClient, fs.RootNodeId)
+	assert.NoError(t, rootModel.Init())
+
+	model := newModel(apiClient, "efgh")
+	assert.NoError(t, model.Init())
+
+	path := "../C"
+	abspath := model.absPath(path)
+
+	assert.Equal(t, "/A/B/C", abspath)
+}
+
+// TODO: absPathReturnsSamePathForExistingAbsolutePath
+// TODO: absPathReturnsRootWhenUpdirsExceedTreeDepth
+// TODO: abspathReturnsFullPathForSingleLeaf
 
 func resetMemCache() error {
 	if handle, err := cayley.NewMemoryGraph(); err != nil {
@@ -132,10 +173,16 @@ func newFakeApiClient() *fakeApiClient {
 }
 
 func (client *fakeApiClient) AddFile(file fs.FileInfo) error {
-	file.Id = uuid.New()
+	fmt.Println(client.fileMap)
+	if file.Id == "" {
+		file.Id = uuid.New()
+	}
 	if children, ok := client.fileMap[file.ParentId]; ok {
 		children = append(children, file)
 		client.fileMap[file.ParentId] = children
+		if file.Attr&int64(os.ModeDir) > 0 {
+			client.fileMap[file.Id] = make([]fs.FileInfo, 0)
+		}
 		return nil
 	} else {
 		return errors.New("File with id: " + file.ParentId + " does not exist")

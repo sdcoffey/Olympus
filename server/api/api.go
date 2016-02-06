@@ -23,23 +23,31 @@ type Decoder interface {
 	Decode(interface{}) error
 }
 
-func Router() http.Handler {
+type OlympusApi struct {
+	http.Handler
+	fs *fs.Filesystem
+}
+
+func NewApi(fs *fs.Filesystem) OlympusApi {
 	r := mux.NewRouter()
 	v1Router := r.PathPrefix("/v1").Subrouter()
-	v1Router.HandleFunc("/ls/{parentId}", LsFiles).Methods("GET")
-	v1Router.HandleFunc("/ls/{fileId}/blocks", Blocks).Methods("GET")
-	v1Router.HandleFunc("/mv/{fileId}/{newParentId}", MvFile).Methods("PATCH")
-	v1Router.HandleFunc("/rm/{fileId}", RmFile).Methods("DELETE")
-	v1Router.HandleFunc("/mkdir/{parentId}/{name}", MkDir).Methods("POST")
-	v1Router.HandleFunc("/cr/{parentId}", Cr).Methods("POST")
-	v1Router.HandleFunc("/update/{fileId}", Update).Methods("PATCH")
-	v1Router.HandleFunc("/dd/{fileId}/{offset}", WriteBlock).Methods("POST")
-	v1Router.HandleFunc("/cat/{fileId}/{offset}", ReadBlock).Methods("GET")
+
+	restApi := OlympusApi{r, fs}
+
+	v1Router.HandleFunc("/ls/{parentId}", restApi.LsFiles).Methods("GET")
+	v1Router.HandleFunc("/ls/{fileId}/blocks", restApi.Blocks).Methods("GET")
+	v1Router.HandleFunc("/mv/{fileId}/{newParentId}", restApi.MvFile).Methods("PATCH")
+	v1Router.HandleFunc("/rm/{fileId}", restApi.Rm).Methods("DELETE")
+	v1Router.HandleFunc("/mkdir/{parentId}/{name}", restApi.MkDir).Methods("POST")
+	v1Router.HandleFunc("/cr/{parentId}", restApi.Cr).Methods("POST")
+	v1Router.HandleFunc("/update/{fileId}", restApi.Update).Methods("PATCH")
+	v1Router.HandleFunc("/dd/{fileId}/{offset}", restApi.WriteBlock).Methods("POST")
+	v1Router.HandleFunc("/cat/{fileId}/{offset}", restApi.ReadBlock).Methods("GET")
 
 	fileServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
 	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", fileServer))
 
-	return r
+	return api
 }
 
 func encoderFromHeader(w io.Writer, header http.Header) Encoder {
@@ -59,8 +67,8 @@ func decoderFromHeader(body io.Reader, header http.Header) Decoder {
 }
 
 // GET v1/ls/{parentId}
-func LsFiles(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("parentId", req))
+func (restApi OlympusApi) LsFiles(writer http.ResponseWriter, req *http.Request) {
+	file := fs.FileWithId(paramFromRequest("parentId", req), restApi.fs)
 	if !file.Exists() {
 		writeFileNotFoundError(file, writer)
 		return
@@ -79,8 +87,8 @@ func LsFiles(writer http.ResponseWriter, req *http.Request) {
 }
 
 // DELETE /v1/rm/{fileId}
-func RmFile(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req))
+func (restApi OlympusApi) RmFile(writer http.ResponseWriter, req *http.Request) {
+	file := fs.FileWithId(paramFromRequest("fileId", req), restApi.fs)
 	if !file.Exists() {
 		writeFileNotFoundError(file, writer)
 		return
@@ -95,14 +103,14 @@ func RmFile(writer http.ResponseWriter, req *http.Request) {
 }
 
 // PATCH /mv/{fileId}/{newParentId}?rename={newName}
-func MvFile(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req))
+func (restApi OlympusApi) MvFile(writer http.ResponseWriter, req *http.Request) {
+	file := fs.FileWithId(paramFromRequest("fileId", req), restApi.fs)
 	if !file.Exists() {
 		writeFileNotFoundError(file, writer)
 		return
 	}
 
-	newParent := fs.FileWithId(paramFromRequest("newParentId", req))
+	newParent := fs.FileWithId(paramFromRequest("newParentId", req), restApi.fs)
 	if !newParent.Exists() {
 		writeFileNotFoundError(newParent, writer)
 		return
@@ -113,7 +121,7 @@ func MvFile(writer http.ResponseWriter, req *http.Request) {
 		newName = file.Name()
 	}
 
-	err := file.Mv(newName, newParent.Id)
+	err := restApi.fs.MoveObject(file, newName, newParent.Id)
 	if err != nil {
 		http.Error(writer, err.Error(), 500)
 	} else {
@@ -143,8 +151,8 @@ func MkDir(writer http.ResponseWriter, req *http.Request) {
 // POST v1/cr/{parentId}
 // body -> {FileInfo}
 // returns -> {FileInfo}
-func Cr(writer http.ResponseWriter, req *http.Request) {
-	parent := fs.FileWithId(paramFromRequest("parentId", req))
+func (restApi OlympusApi) Cr(writer http.ResponseWriter, req *http.Request) {
+	parent := fs.FileWithId(paramFromRequest("parentId", req), restApi.fs)
 	if !parent.Exists() {
 		writeFileNotFoundError(parent, writer)
 		return
@@ -158,10 +166,12 @@ func Cr(writer http.ResponseWriter, req *http.Request) {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
-	} else if file := fs.FileWithName(parent.Id, fileInfo.Name); file != nil && file.Exists() {
+	} else if file := restApi.fs.FileWithName(parent.Id, fileInfo.Name); file != nil && file.Exists() {
 		http.Error(writer, fmt.Sprintf("File exists, call /v1/touch/%s/to update this object", file.Id), 400)
 	} else {
-		if newFile, err := fs.MkFile(fileInfo.Name, parent.Id, fileInfo.Size, fileInfo.MTime); err != nil {
+		fileInfo.ParentId = parent.Id
+		newFile := fs.FileWithFileInfo(fileInfo)
+		if err := newFile.Save(); err != nil {
 			http.Error(writer, err.Error(), 400)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)

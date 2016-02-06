@@ -14,10 +14,12 @@ import (
 
 const (
 	parentLink = "hasParent"
-	sizeLink   = "hasSize"
 	nameLink   = "isNamed"
 	modeLink   = "modeLink"
 	mTimeLink  = "hasMTime"
+	sizeLink   = "hasSize"
+
+	timeFormat = time.RFC3339Nano
 )
 
 type NTree interface {
@@ -26,104 +28,76 @@ type NTree interface {
 }
 
 type OFile struct {
-	Id    string
-	cache map[string]string
-
-	name     string
+	Id       string
+	fs       *Filesystem
 	parentId string
+	name     string
 	size     int64
-	mode     os.FileMode
 	mTime    time.Time
+	mode     os.FileMode
 }
 
-func newFile(filename string) *OFile {
-	return &OFile{Id: uuid.NewUUID().String(), mode: 700, mTime: time.Now(), name: filename, cache: make(map[string]string)}
+func newFile(filename string, fs *Filesystem) *OFile {
+	file := new(OFile)
+	file.Id = uuid.New()
+	file.mTime = time.Now()
+	file.name = filename
+	file.fs = fs
+	return file
 }
 
-func FileWithFileInfo(info FileInfo) *OFile {
-	file := FileWithId(info.Id)
+func FileWithFileInfo(info FileInfo, fs *Filesystem) *OFile {
+	file := FileWithId(info.Id, fs)
+	file.fs = fs
 	file.name = info.Name
-	file.parentId = info.ParentId
-	file.mode = os.FileMode(info.Attr)
-	file.size = info.Size
+	file.mode = os.FileMode(info.Mode)
 	file.mTime = info.MTime
+	file.parentId = info.ParentId
 
 	return file
 }
 
-func FileWithId(id string) *OFile {
-	return &OFile{Id: id, cache: make(map[string]string)}
-}
-
-func FileWithName(parentId, name string) *OFile {
-	namePath := cayley.StartPath(GlobalFs(), name).In(nameLink)
-	parentpath := cayley.StartPath(GlobalFs(), parentId).In(parentLink)
-
-	it := namePath.And(parentpath).BuildIterator()
-	if cayley.RawNext(it) {
-		return FileWithId(GlobalFs().NameOf(it.Result()))
-	}
-
-	return nil
+func FileWithId(id string, fs *Filesystem) *OFile {
+	return &OFile{Id: id, fs: fs}
 }
 
 // interface FileInfo
-func (of *OFile) Name() (name string) {
-	var ok bool
-	if name, ok = of.cache[nameLink]; !ok {
-		if name = of.graphValue(nameLink); name != "" {
-			of.cache[nameLink] = name
-		}
+func (of *OFile) Name() string {
+	if name := of.graphValue(nameLink); name != "" {
+		return name
+	} else {
+		return ""
 	}
-
-	return name
 }
 
-func (of *OFile) Size() (size int64) {
-	var sizeString string
-	var ok bool
-	if sizeString, ok = of.cache[sizeLink]; !ok {
-		if sizeString = of.graphValue(sizeLink); sizeString != "" {
-			of.cache[sizeLink] = sizeString
-		}
-	}
-
-	var err error
-	if size, err = strconv.ParseInt(sizeString, 10, 64); err != nil {
+func (of *OFile) Size() int64 {
+	if of.IsDir() {
 		return 0
 	}
-	return
+
+	sizeString := of.graphValue(sizeLink)
+	if size, err := strconv.ParseInt(sizeString, 10, 64); err != nil {
+		return 0
+	} else {
+		return size
+	}
 }
 
 func (of *OFile) Mode() os.FileMode {
-	var modeString string
-	var ok bool
-	if modeString, ok = of.cache[modeLink]; !ok {
-		if modeString = of.graphValue(modeLink); modeString != "" {
-			of.cache[modeLink] = modeString
-		}
-	}
-
+	modeString := of.graphValue(modeLink)
 	if mode, err := strconv.ParseInt(modeString, 10, 64); err != nil {
-		return 0
+		return os.FileMode(0)
 	} else {
 		return os.FileMode(mode)
 	}
 }
 
-func (of *OFile) ModTime() time.Time {
-	var timeString string
-	var ok bool
-	if timeString, ok = of.cache[mTimeLink]; !ok {
-		if timeString = of.graphValue(mTimeLink); timeString != "" {
-			of.cache[mTimeLink] = timeString
-		}
-	}
-
-	if unixTime, err := strconv.ParseInt(timeString, 10, 64); err != nil {
+func (of *OFile) MTime() time.Time {
+	timeString := of.graphValue(mTimeLink)
+	if t, err := time.Parse(timeFormat, timeString); err != nil {
 		return time.Time{}
 	} else {
-		return time.Unix(unixTime, 0)
+		return t
 	}
 }
 
@@ -131,23 +105,14 @@ func (of *OFile) IsDir() bool {
 	return of.Mode()&os.ModeDir > 0
 }
 
-func (of *OFile) Sys() interface{} {
-	return nil
-}
-
 // interface NTree
 func (of *OFile) Parent() *OFile {
-	if parentId, ok := of.cache[parentLink]; !ok {
-		parentId = of.graphValue(parentLink)
-		if parentId != "" {
-			of.cache[parentLink] = parentId
-			return FileWithId(parentId)
-		} else {
-			return nil
-		}
+	var parentId string
+	if parentId = of.graphValue(parentLink); parentId == "" {
+		return nil
 	}
 
-	return FileWithId(of.cache[parentLink])
+	return FileWithId(parentId, of.fs)
 }
 
 func (of *OFile) Children() []*OFile {
@@ -155,10 +120,10 @@ func (of *OFile) Children() []*OFile {
 		return make([]*OFile, 0)
 	}
 
-	it := cayley.StartPath(GlobalFs(), of.Id).In(parentLink).BuildIterator()
+	it := cayley.StartPath(of.fs, of.Id).In(parentLink).BuildIterator()
 	children := make([]*OFile, 0, 10)
 	for cayley.RawNext(it) {
-		child := FileWithId(GlobalFs().NameOf(it.Result()))
+		child := FileWithId(of.fs.NameOf(it.Result()), of.fs)
 		child.parentId = of.Id
 		children = append(children, child)
 	}
@@ -171,9 +136,9 @@ func (of *OFile) BlockWithOffset(offset int64) string {
 		return ""
 	}
 
-	it := cayley.StartPath(GlobalFs(), of.Id).Out(fmt.Sprint("offset-", offset)).BuildIterator()
+	it := cayley.StartPath(of.fs, of.Id).Out(fmt.Sprint("offset-", offset)).BuildIterator()
 	if cayley.RawNext(it) {
-		return GlobalFs().NameOf(it.Result())
+		return of.fs.NameOf(it.Result())
 	} else {
 		return ""
 	}
@@ -192,10 +157,10 @@ func (of *OFile) Blocks() []BlockInfo {
 	blocks := make([]BlockInfo, 0, blockCap)
 	var i int64
 	for i = 0; i < of.Size(); i += BLOCK_SIZE {
-		it := cayley.StartPath(GlobalFs(), of.Id).Out(fmt.Sprint("offset-", i)).BuildIterator()
+		it := cayley.StartPath(of.fs, of.Id).Out(fmt.Sprint("offset-", i)).BuildIterator()
 		for cayley.RawNext(it) {
 			info := BlockInfo{
-				Hash:   GlobalFs().NameOf(it.Result()),
+				Hash:   of.fs.NameOf(it.Result()),
 				Offset: i,
 			}
 			blocks = append(blocks, info)
@@ -221,7 +186,7 @@ func (of *OFile) WriteData(data []byte, offset int64) error {
 	}
 	transaction.AddQuad(cayley.Quad(of.Id, fmt.Sprint("offset-", offset), hash, ""))
 
-	if err := GlobalFs().ApplyTransaction(transaction); err != nil {
+	if err := of.fs.ApplyTransaction(transaction); err != nil {
 		return err
 	}
 
@@ -232,59 +197,93 @@ func (of *OFile) WriteData(data []byte, offset int64) error {
 	return nil
 }
 
-// interface GraphWriter
 func (of *OFile) Save() (err error) {
 	if of.name == "" && of.Name() == "" {
-		return errors.New("cannot add nameless file")
+		return errors.New("Cannot add nameless file")
 	} else if of.mTime.After(time.Now()) {
-		return errors.New("cannot set futuristic mTime")
+		of.mTime = time.Time{}
+		return errors.New("Cannot set futuristic mTime")
+	} else if of.size < 0 {
+		of.size = 0
+		return errors.New("File cannot have negative size")
+	} else if (of.mode&os.ModeDir > 0) && of.size != 0 {
+		of.mode = os.FileMode(0)
+		return errors.New("Dir cannot have non-zero size")
+	} else if (of.mode&os.ModeDir > 0) != of.IsDir() {
+		of.mode = os.FileMode(0)
+		return errors.New("Cannot change between file and directory")
 	}
 
 	staleQuads := graph.NewTransaction()
 	newQuads := graph.NewTransaction()
-
 	if of.name != of.Name() {
-		if of.Name() != "" {
-			staleQuads.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
-		}
-		newQuads.AddQuad(cayley.Quad(of.Id, nameLink, of.name, ""))
+		staleQuads.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
 	}
-	if of.mode != of.Mode() {
-		if of.Mode() > 0 {
-			staleQuads.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
-		}
-		newQuads.AddQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.mode)), ""))
-	}
+	newQuads.AddQuad(cayley.Quad(of.Id, nameLink, of.name, ""))
+
 	if of.size != of.Size() {
-		if of.Size() > 0 {
-			staleQuads.RemoveQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
-		}
+		staleQuads.RemoveQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
+	}
+	if of.size > 0 {
 		newQuads.AddQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.size), ""))
+		of.size = 0
 	}
-	if !of.mTime.Equal(of.ModTime()) {
-		if !of.ModTime().IsZero() {
-			staleQuads.RemoveQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), ""))
-		}
-		newQuads.AddQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.mTime.Unix()), ""))
+
+	if of.mode != of.Mode() {
+		staleQuads.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
 	}
-	if of.parentId != "" && of.Parent() == nil || of.Parent() != nil && of.parentId != of.Parent().Id {
-		if of.Parent() != nil {
-			staleQuads.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
-		}
+	if int(of.mode) > 0 {
+		newQuads.AddQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.mode)), ""))
+		of.mode = os.FileMode(0)
+	}
+
+	if of.mTime != of.MTime() {
+		staleQuads.RemoveQuad(cayley.Quad(of.Id, mTimeLink, of.MTime().Format(timeFormat), ""))
+	}
+	if !of.mTime.IsZero() {
+		newQuads.AddQuad(cayley.Quad(of.Id, mTimeLink, of.mTime.Format(timeFormat), ""))
+		of.mTime = time.Time{}
+	}
+
+	if of.parentId != "" && of.Parent() != nil && of.parentId != of.Parent().Id {
+		staleQuads.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
+	}
+	if of.parentId != "" {
 		newQuads.AddQuad(cayley.Quad(of.Id, parentLink, of.parentId, ""))
+		of.parentId = ""
 	}
 
-	if err = GlobalFs().ApplyTransaction(staleQuads); err != nil {
+	if err = of.fs.ApplyTransaction(staleQuads); err != nil {
 		return
-	} else if err = GlobalFs().ApplyTransaction(newQuads); err != nil {
+	} else if err = of.fs.ApplyTransaction(newQuads); err != nil {
 		return
 	}
 
-	for _, delta := range staleQuads.Deltas {
-		delete(of.cache, delta.Quad.Predicate)
+	return nil
+}
+
+func (of *OFile) graphValue(key string) (value string) {
+	it := cayley.StartPath(of.fs, of.Id).Out(key).BuildIterator()
+	if cayley.RawNext(it) {
+		value = of.fs.NameOf(it.Result())
 	}
 
 	return
+}
+
+func (of *OFile) Chmod(newMode os.FileMode) error {
+	of.mode = newMode
+	return of.Save()
+}
+
+func (of *OFile) Resize(newSize int64) error {
+	of.size = newSize
+	return of.Save()
+}
+
+func (of *OFile) Touch(mTime time.Time) error {
+	of.mTime = mTime
+	return of.Save()
 }
 
 func (of *OFile) Exists() bool {
@@ -293,9 +292,9 @@ func (of *OFile) Exists() bool {
 
 func (of *OFile) FileInfo() FileInfo {
 	info := FileInfo{}
-	info.Attr = int64(of.Mode())
+	info.Mode = uint32(of.Mode())
 	info.Id = of.Id
-	info.MTime = of.ModTime()
+	info.MTime = of.MTime()
 	info.Name = of.Name()
 	info.Size = of.Size()
 	if of.Parent() != nil {
@@ -306,51 +305,5 @@ func (of *OFile) FileInfo() FileInfo {
 }
 
 func (of *OFile) String() string {
-	return fmt.Sprintf("%s	%d	%s	%s (%s)", of.Mode(), of.Size(), of.ModTime().Format(time.Stamp), of.Name(), of.Id)
-}
-
-func (of *OFile) graphValue(key string) (value string) {
-	it := cayley.StartPath(GlobalFs(), of.Id).Out(key).BuildIterator()
-	if cayley.RawNext(it) {
-		value = GlobalFs().NameOf(it.Result())
-	}
-
-	return
-}
-
-func (of *OFile) delete() (err error) {
-	if len(of.Children()) > 0 {
-		return errors.New("Can't delete file with children, must delete children first")
-	}
-
-	transaction := cayley.NewTransaction()
-	if of.Mode() != 0 {
-		transaction.RemoveQuad(cayley.Quad(of.Id, modeLink, fmt.Sprint(int(of.Mode())), ""))
-	}
-	if !of.ModTime().IsZero() {
-		transaction.RemoveQuad(cayley.Quad(of.Id, mTimeLink, fmt.Sprint(of.ModTime().Unix()), ""))
-	}
-	if of.Name() != "" {
-		transaction.RemoveQuad(cayley.Quad(of.Id, nameLink, of.Name(), ""))
-	}
-	if of.Parent() != nil {
-		transaction.RemoveQuad(cayley.Quad(of.Id, parentLink, of.Parent().Id, ""))
-	}
-	if of.Size() > 0 {
-		transaction.RemoveQuad(cayley.Quad(of.Id, sizeLink, fmt.Sprint(of.Size()), ""))
-	}
-
-	err = GlobalFs().ApplyTransaction(transaction)
-
-	if err == nil {
-		of.mode = 1
-		of.size = 0
-		of.mTime = time.Time{}
-		of.name = ""
-		of.parentId = ""
-		of.Id = ""
-		of.cache = make(map[string]string)
-	}
-
-	return
+	return fmt.Sprintf("%s	%d	%s	%s (%s)", of.Mode(), of.Size(), of.MTime().Format(time.Stamp), of.Name(), of.Id)
 }
