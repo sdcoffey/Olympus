@@ -13,13 +13,15 @@ const (
 	maxSize = fs.KILOBYTE
 )
 
-func FindServer() (net.IP, error) {
+func FindServer(timeout time.Duration) (net.IP, error) {
 	if addr, err := net.ResolveUDPAddr("udp4", address); err != nil {
 		return net.IPv4zero, err
 	} else if socket, err := net.ListenMulticastUDP("udp4", nil, addr); err != nil {
 		return net.IPv4zero, err
 	} else {
 		defer socket.Close()
+		socket.SetReadDeadline(time.Now().Add(timeout))
+
 		for {
 			socket.SetReadBuffer(maxSize)
 			b := make([]byte, maxSize)

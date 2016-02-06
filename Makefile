@@ -1,7 +1,7 @@
 
 pkgs = client/apiclient	client/cli	client/shared	env	fs	peer	server	server/api
 
-all: build
+all: build-all
 
 clean:
 	@rm -rf build
@@ -10,10 +10,18 @@ clean:
 		goimports -w ./$$package ; \
 	done
 
+build-all: clean
+	@mkdir -p build/bin
+	go build -o build/bin/server github.com/sdcoffey/olympus/server
+	go build -o build/bin/cli github.com/sdcoffey/olympus/client/cli
+
 build: clean
-	@mkdir -p build/executables
-	@go build -x -o build/executables/server github.com/sdcoffey/olympus/server
-	@go build -x -o build/executables/cli github.com/sdcoffey/olympus/client/cli
+	@mkdir -p build/bin
+	go build -o build/bin/server github.com/sdcoffey/olympus/server
+
+build-cli: clean
+	@mkdir -p build/bin
+	go build -o build/bin/cli github.com/sdcoffey/olympus/client/cli
 
 install:
 	@ps aux | grep [o]lympus | awk '{print $$2}' | xargs kill -9

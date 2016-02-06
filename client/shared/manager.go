@@ -41,3 +41,23 @@ func (manager *OManager) CreateDirectory(parentId string, name string) error {
 	_, err := manager.api.CreateDirectory(parentId, name)
 	return err
 }
+
+func (manager *OManager) RemoveFile(id string) error {
+	if err := manager.api.RemoveFile(id); err != nil {
+		return err
+	} else if err = manager.Model.Refresh(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (manager *OManager) MoveFile(fileId, newParentId, newName string) error {
+	if err := manager.api.MoveFile(fileId, newParentId, newName); err != nil {
+		return err
+	} else if err = manager.Model.Refresh(); err != nil {
+		return err
+	}
+
+	return nil
+}

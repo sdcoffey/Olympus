@@ -10,6 +10,7 @@ Currently in pre-beta, Olympus is nearly fully-implemented on the server-side, b
  - `mkdir`
  - `pwd`
  - `cd`
+ - `rm`
 
 You can run Olympus on any machine on your local network. Client/server discovery happens automatically via UDP when you start your client.
 
@@ -34,7 +35,8 @@ Data and config files are, by default, stored in a the current users's home dire
 
 ## Coming Soon
  - Mobile and Web clients
+ - Desktop agent
  - File streaming API
  - HTTP/2 Support
  - Expanded runtime configuration options
- - Support for remote instances
+ - Remote instance support
