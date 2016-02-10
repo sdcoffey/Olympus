@@ -1,5 +1,5 @@
 
-pkgs = client/apiclient	client/cli	client/shared	env	fs	peer	server	server/api
+pkgs = client/apiclient	client/cli	client/shared	env	graph	peer	server	server/api
 
 all: build-all
 

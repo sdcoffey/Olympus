@@ -1,8 +1,8 @@
-package fs
+package graph
 
 import "time"
 
-type FileInfo struct {
+type NodeInfo struct {
 	Id       string
 	ParentId string
 	Name     string

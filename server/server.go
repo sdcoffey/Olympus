@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 
 	"github.com/google/cayley"
-	"github.com/google/cayley/graph"
+	cgraph "github.com/google/cayley/graph"
 	_ "github.com/google/cayley/graph/bolt"
 	"github.com/sdcoffey/olympus/env"
-	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
 	"github.com/sdcoffey/olympus/server/api"
 )
@@ -18,34 +18,33 @@ var debug = false
 
 func main() {
 	env.InitializeEnvironment()
-	if err := initDb(); err != nil {
+	if nodeGraph, err := initDb(); err != nil {
 		println(err.Error())
 		os.Exit(1)
 	} else {
-		fs.RootNode()
+		go peer.ClientHeartbeat()
+		http.ListenAndServe(":3000", api.NewApi(nodeGraph))
 	}
-
-	go peer.ClientHeartbeat()
-	http.ListenAndServe(":3000", api.Router())
 }
 
-func initDb() (err error) {
+func initDb() (*graph.NodeGraph, error) {
 	var handle *cayley.Handle
+	var err error
 	if !debug {
 		dbPath := filepath.Join(env.EnvPath(env.DbPath), "db.dat")
 		if !env.Exists(dbPath) {
-			if err = graph.InitQuadStore("bolt", dbPath, nil); err != nil {
-				return
+			if err = cgraph.InitQuadStore("bolt", dbPath, nil); err != nil {
+				return nil, err
 			}
 		}
 		if handle, err = cayley.NewGraph("bolt", dbPath, nil); err != nil {
-			return
+			return nil, err
 		}
 	} else {
 		if handle, err = cayley.NewMemoryGraph(); err != nil {
-			return
+			return nil, err
 		}
 	}
 
-	return fs.Init(handle)
+	return graph.NewGraph(handle)
 }

@@ -11,11 +11,15 @@ import (
 	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/client/shared"
+	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
 	"github.com/wsxiaoys/terminal/color"
 )
 
-var manager *shared.OManager
+var (
+	manager *shared.Manager
+	model   *shared.Model
+)
 
 func main() {
 	handle := initDb()
@@ -31,8 +35,9 @@ func main() {
 		client = apiclient.ApiClient{Address: resolvedPath}
 	}
 
+	var err error
 	manager = shared.NewManager(client, handle)
-	if err := manager.Init(); err != nil {
+	if model, err = manager.Model(graph.RootNodeId); err != nil {
 		panic(err)
 	}
 
@@ -41,7 +46,7 @@ func main() {
 	app.Commands = []cli.Command{
 		{
 			Name:   "ls",
-			Usage:  "List files in current directory",
+			Usage:  "List nodes in current directory",
 			Action: ls,
 			Flags: []cli.Flag{
 				cli.BoolFlag{
@@ -67,7 +72,7 @@ func main() {
 		},
 		{
 			Name:   "rm",
-			Usage:  "Remove file",
+			Usage:  "Remove node",
 			Action: rm,
 		},
 		{
@@ -104,17 +109,16 @@ func initDb() *cayley.Handle {
 }
 
 func ls(c *cli.Context) {
-	model := manager.Model
 	if err := model.Refresh(); err != nil {
 		color.Println("@r", err.Error())
 	} else {
-		for _, file := range model.Root.Children() {
+		for _, node := range model.Root.Children() {
 			if c.Bool("l") {
-				fmt.Println(file.String())
+				fmt.Println(node.String())
 			} else {
-				name := file.Name()
+				name := node.Name()
 				var col string
-				if file.IsDir() {
+				if node.IsDir() {
 					col = "@b"
 					name += "/"
 				}
@@ -134,15 +138,16 @@ func cd(c *cli.Context) {
 	}
 
 	dirname := c.Args()[0]
+	var err error
 	if dirname == ".." {
-		if manager.Model.Root.Parent() == nil {
+		if model.Root.Parent() == nil {
 			return
-		} else if err := manager.ChangeDirectory(manager.Model.Root.Parent().Id); err != nil {
+		} else if model, err = manager.Model(model.Root.Parent().Id); err != nil {
 			color.Println("@r", err.Error())
 		}
-	} else if file := manager.Model.FindFileByName(dirname); file == nil {
-		color.Println("@rNo such file: ", dirname)
-	} else if err := manager.ChangeDirectory(file.Id); err != nil {
+	} else if node := model.FindNodeByName(dirname); node == nil {
+		color.Println("@rNo such node: ", dirname)
+	} else if model, err = manager.Model(node.Id); err != nil {
 		color.Println("@r", err.Error())
 	}
 }
@@ -154,7 +159,7 @@ func mkdir(c *cli.Context) {
 	}
 	name = c.Args()[0]
 
-	if err := manager.CreateDirectory(manager.Model.Root.Id, name); err != nil {
+	if err := manager.CreateDirectory(model.Root.Id, name); err != nil {
 		color.Println("@r", err.Error())
 	}
 }
@@ -170,15 +175,15 @@ func rm(c *cli.Context) {
 	}
 	victim := c.Args()[0]
 
-	if file := manager.Model.FindFileByName(victim); file == nil {
-		color.Println("@rNo such file: ", victim)
-	} else if err := manager.RemoveFile(file.Id); err != nil {
+	if node := model.FindNodeByName(victim); node == nil {
+		color.Println("@rNo such node: ", victim)
+	} else if err := manager.RemoveNode(node.Id); err != nil {
 		color.Println("@r", err.Error())
 	}
 }
 
 func workingDirectory() string {
-	here := manager.Model.Root
+	here := model.Root
 	var path string
 	if here.Parent() != nil {
 		path = here.Name()

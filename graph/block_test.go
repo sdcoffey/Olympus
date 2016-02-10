@@ -1,4 +1,4 @@
-package fs
+package graph
 
 import (
 	"io/ioutil"
@@ -119,7 +119,7 @@ func TestSizeOnDisk_throwsForBadFingerprint(t *testing.T) {
 }
 
 func TestLocationOnDisk_returnsCorrectLocationForFingerprint(t *testing.T) {
-	baseLocation := testInit()
+	testInit()
 
 	dat := RandDat(1024)
 	fingerprint := Hash(dat)
@@ -129,6 +129,7 @@ func TestLocationOnDisk_returnsCorrectLocationForFingerprint(t *testing.T) {
 
 	location := LocationOnDisk(fingerprint)
 
+	baseLocation := filepath.Dir(env.EnvPath(env.DataPath))
 	expectedLocation := filepath.Join(baseLocation, filepath.Join("dat", fingerprint))
 	assert.Equal(t, expectedLocation, location)
 }

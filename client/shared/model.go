@@ -3,26 +3,26 @@ package shared
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/sdcoffey/olympus/client/apiclient"
-	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/graph"
 )
 
-type OModel struct {
-	Root *fs.OFile
-	api  apiclient.OlympusClient
+type Model struct {
+	graph *graph.NodeGraph
+	Root  *graph.Node
+	api   apiclient.OlympusClient
 }
 
-func newModel(api apiclient.OlympusClient, RootId string) *OModel {
-	model := new(OModel)
-	model.Root = fs.FileWithId(RootId)
-	model.api = api
-
-	return model
+func newModel(api apiclient.OlympusClient, rootNode *graph.Node, ng *graph.NodeGraph) *Model {
+	return &Model{
+		Root:  rootNode,
+		api:   api,
+		graph: ng,
+	}
 }
 
-func (model *OModel) Init() error {
+func (model *Model) init() error {
 	if !model.Root.Exists() {
 		return errors.New(fmt.Sprintf("Root with id: %s does not exist", model.Root.Id))
 	}
@@ -34,22 +34,26 @@ func (model *OModel) Init() error {
 	}
 }
 
-func (model *OModel) Refresh() error {
-	fileSet := make(map[string]bool)
-	for _, fileOnDisk := range model.Root.Children() {
-		fileSet[fileOnDisk.Id] = true
+func (model *Model) Refresh() error {
+	nodeSet := make(map[string]bool)
+	for _, nodeOnDisk := range model.Root.Children() {
+		nodeSet[nodeOnDisk.Id] = true
 	}
 
-	if fileInfos, err := model.api.ListFiles(model.Root.Id); err != nil {
+	if nodeInfos, err := model.api.ListNodes(model.Root.Id); err != nil {
 		return err
 	} else {
 		var err error
-		for i := 0; i < len(fileInfos) && err == nil; i++ {
-			fi := fileInfos[i]
-			file := fs.FileWithFileInfo(fi)
-			err = file.Save()
-			if _, ok := fileSet[fi.Id]; ok {
-				delete(fileSet, fi.Id)
+		for i := 0; i < len(nodeInfos) && err == nil; i++ {
+			nodeInfo := nodeInfos[i]
+			node := model.graph.NodeWithNodeInfo(nodeInfo)
+			err = node.Save()
+			if err != nil {
+				fmt.Println(err)
+				fmt.Println(nodeInfo)
+			}
+			if _, ok := nodeSet[nodeInfo.Id]; ok {
+				delete(nodeSet, nodeInfo.Id)
 			}
 		}
 
@@ -58,49 +62,22 @@ func (model *OModel) Refresh() error {
 		}
 	}
 
-	for id, _ := range fileSet {
-		staleId := fs.FileWithId(id)
-		fs.Rm(staleId)
-	}
-
-	return nil
-}
-
-func (model *OModel) FindFileByName(name string) *fs.OFile {
-	if file := fs.FileWithName(model.Root.Id, name); file == nil {
-		model.Refresh()
-		file = fs.FileWithName(model.Root.Id, name)
-		return file
-	} else {
-		return file
-	}
-}
-
-func (model *OModel) FindFileByPath(path string) *fs.OFile {
-	path = model.absPath(path)
-
-	return nil
-}
-
-// Takes a path relative to this model, e.g. "../path/to/file, and constructs a absolute path
-// from it => /data/one/path/to/file
-func (model *OModel) absPath(path string) string {
-	if len(path) == 0 {
-		return path
-	} else if string(path[0]) == "/" {
-		return path
-	}
-
-	leaves := filepath.SplitList(path)
-	curnode := model.Root
-	path = "/"
-	for _, leaf := range leaves {
-		if leaf == ".." && curnode.Parent() != nil {
-			curnode = curnode.Parent()
-		} else {
-			curnode := fs.FileWithName(curnode.Id, leaf)
-			path = filepath.Join(path, curnode.Name())
+	for id, _ := range nodeSet {
+		staleNode := model.graph.NodeWithId(id)
+		if err := model.graph.RemoveNode(staleNode); err != nil {
+			return err
 		}
 	}
-	return path
+
+	return nil
+}
+
+func (model *Model) FindNodeByName(name string) *graph.Node {
+	if node := model.graph.NodeWithName(model.Root.Id, name); node == nil {
+		model.Refresh()
+		node = model.graph.NodeWithName(model.Root.Id, name)
+		return node
+	} else {
+		return node
+	}
 }

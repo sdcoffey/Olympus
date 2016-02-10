@@ -5,12 +5,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/graph"
 )
 
 const (
 	address = "224.0.0.1:5353"
-	maxSize = fs.KILOBYTE
+	maxSize = graph.KILOBYTE
 )
 
 func FindServer(timeout time.Duration) (net.IP, error) {

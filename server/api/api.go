@@ -12,7 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
-	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/graph"
 )
 
 type Encoder interface {
@@ -25,29 +25,28 @@ type Decoder interface {
 
 type OlympusApi struct {
 	http.Handler
-	fs *fs.Filesystem
+	graph *graph.NodeGraph
 }
 
-func NewApi(fs *fs.Filesystem) OlympusApi {
+func NewApi(ng *graph.NodeGraph) OlympusApi {
 	r := mux.NewRouter()
 	v1Router := r.PathPrefix("/v1").Subrouter()
 
-	restApi := OlympusApi{r, fs}
+	restApi := OlympusApi{r, ng}
 
-	v1Router.HandleFunc("/ls/{parentId}", restApi.LsFiles).Methods("GET")
-	v1Router.HandleFunc("/ls/{fileId}/blocks", restApi.Blocks).Methods("GET")
-	v1Router.HandleFunc("/mv/{fileId}/{newParentId}", restApi.MvFile).Methods("PATCH")
-	v1Router.HandleFunc("/rm/{fileId}", restApi.Rm).Methods("DELETE")
-	v1Router.HandleFunc("/mkdir/{parentId}/{name}", restApi.MkDir).Methods("POST")
-	v1Router.HandleFunc("/cr/{parentId}", restApi.Cr).Methods("POST")
-	v1Router.HandleFunc("/update/{fileId}", restApi.Update).Methods("PATCH")
-	v1Router.HandleFunc("/dd/{fileId}/{offset}", restApi.WriteBlock).Methods("POST")
-	v1Router.HandleFunc("/cat/{fileId}/{offset}", restApi.ReadBlock).Methods("GET")
+	v1Router.HandleFunc("/ls/{parentId}", restApi.ListNodes).Methods("GET")
+	v1Router.HandleFunc("/ls/{nodeId}/blocks", restApi.Blocks).Methods("GET")
+	v1Router.HandleFunc("/mv/{nodeId}/{newParentId}", restApi.MoveNode).Methods("PATCH")
+	v1Router.HandleFunc("/rm/{nodeId}", restApi.RemoveNode).Methods("DELETE")
+	v1Router.HandleFunc("/cr/{parentId}", restApi.CreateNode).Methods("POST")
+	v1Router.HandleFunc("/update/{nodeId}", restApi.UpdateNode).Methods("PATCH")
+	v1Router.HandleFunc("/dd/{nodeId}/{offset}", restApi.WriteBlock).Methods("POST")
+	v1Router.HandleFunc("/cat/{nodeId}/{offset}", restApi.ReadBlock).Methods("GET")
 
 	fileServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
 	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", fileServer))
 
-	return api
+	return restApi
 }
 
 func encoderFromHeader(w io.Writer, header http.Header) Encoder {
@@ -67,18 +66,18 @@ func decoderFromHeader(body io.Reader, header http.Header) Decoder {
 }
 
 // GET v1/ls/{parentId}
-func (restApi OlympusApi) LsFiles(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("parentId", req), restApi.fs)
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
 	}
 
-	children := file.Children()
-	response := make([]fs.FileInfo, len(children))
+	children := node.Children()
+	response := make([]graph.NodeInfo, len(children))
 
 	for idx, child := range children {
-		response[idx] = child.FileInfo()
+		response[idx] = child.NodeInfo()
 	}
 
 	encoder := encoderFromHeader(writer, req.Header)
@@ -86,15 +85,15 @@ func (restApi OlympusApi) LsFiles(writer http.ResponseWriter, req *http.Request)
 	encoder.Encode(response)
 }
 
-// DELETE /v1/rm/{fileId}
-func (restApi OlympusApi) RmFile(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req), restApi.fs)
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+// DELETE /v1/rm/{nodeId}
+func (restApi OlympusApi) RemoveNode(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
 	}
 
-	err := fs.Rm(file)
+	err := restApi.graph.RemoveNode(node)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 	} else {
@@ -102,26 +101,26 @@ func (restApi OlympusApi) RmFile(writer http.ResponseWriter, req *http.Request) 
 	}
 }
 
-// PATCH /mv/{fileId}/{newParentId}?rename={newName}
-func (restApi OlympusApi) MvFile(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req), restApi.fs)
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+// PATCH /mv/{nodeId}/{newParentId}?rename={newName}
+func (restApi OlympusApi) MoveNode(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
 	}
 
-	newParent := fs.FileWithId(paramFromRequest("newParentId", req), restApi.fs)
+	newParent := restApi.graph.NodeWithId(paramFromRequest("newParentId", req))
 	if !newParent.Exists() {
-		writeFileNotFoundError(newParent, writer)
+		writeNodeNotFoundError(newParent, writer)
 		return
 	}
 
 	newName := req.URL.Query().Get("rename")
 	if newName == "" {
-		newName = file.Name()
+		newName = node.Name()
 	}
 
-	err := restApi.fs.MoveObject(file, newName, newParent.Id)
+	err := restApi.graph.MoveNode(node, newName, newParent.Id)
 	if err != nil {
 		http.Error(writer, err.Error(), 500)
 	} else {
@@ -129,72 +128,53 @@ func (restApi OlympusApi) MvFile(writer http.ResponseWriter, req *http.Request) 
 	}
 }
 
-// POST v1/mkdir/{parentId}/{fileName}
-func MkDir(writer http.ResponseWriter, req *http.Request) {
-	parent := fs.FileWithId(paramFromRequest("parentId", req))
-	if !parent.Exists() {
-		writeFileNotFoundError(parent, writer)
-		return
-	}
-
-	name := paramFromRequest("name", req)
-	newFolder, err := parent.MkDir(name)
-	if err != nil {
-		http.Error(writer, err.Error(), 400)
-	} else {
-		encoder := encoderFromHeader(writer, req.Header)
-		writer.WriteHeader(200)
-		encoder.Encode(newFolder.Id)
-	}
-}
-
 // POST v1/cr/{parentId}
-// body -> {FileInfo}
-// returns -> {FileInfo}
-func (restApi OlympusApi) Cr(writer http.ResponseWriter, req *http.Request) {
-	parent := fs.FileWithId(paramFromRequest("parentId", req), restApi.fs)
+// body -> {nodeInfo}
+// returns -> {nodeInfo}
+func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Request) {
+	parent := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
 	if !parent.Exists() {
-		writeFileNotFoundError(parent, writer)
+		writeNodeNotFoundError(parent, writer)
 		return
 	}
 
-	var fileInfo fs.FileInfo
+	var nodeInfo graph.NodeInfo
 	defer req.Body.Close()
 	decoder := decoderFromHeader(req.Body, req.Header)
 
-	if err := decoder.Decode(&fileInfo); err != nil {
+	if err := decoder.Decode(&nodeInfo); err != nil {
 		writer.WriteHeader(400)
 		writer.Write([]byte(err.Error()))
 		return
-	} else if file := restApi.fs.FileWithName(parent.Id, fileInfo.Name); file != nil && file.Exists() {
-		http.Error(writer, fmt.Sprintf("File exists, call /v1/touch/%s/to update this object", file.Id), 400)
+	} else if node := restApi.graph.NodeWithName(parent.Id, nodeInfo.Name); node != nil && node.Exists() {
+		http.Error(writer, fmt.Sprintf("Node exists, call /v1/touch/%s/to update this object", node.Id), 400)
 	} else {
-		fileInfo.ParentId = parent.Id
-		newFile := fs.FileWithFileInfo(fileInfo)
-		if err := newFile.Save(); err != nil {
+		nodeInfo.ParentId = parent.Id
+		newnode := restApi.graph.NodeWithNodeInfo(nodeInfo)
+		if err := newnode.Save(); err != nil {
 			http.Error(writer, err.Error(), 400)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)
 			writer.WriteHeader(200)
-			fileInfo = newFile.FileInfo()
-			encoder.Encode(fileInfo)
+			nodeInfo = newnode.NodeInfo()
+			encoder.Encode(nodeInfo)
 		}
 	}
 }
 
-// PATCH v1/update/{fileId}
-// body -> {FileInfo}
-func Update(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req))
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+// PATCH v1/update/{nodeId}
+// body -> {nodeInfo}
+func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
 	}
 
-	var fileInfo fs.FileInfo
+	var nodeInfo graph.NodeInfo
 	defer req.Body.Close()
 	decoder := decoderFromHeader(req.Body, req.Header)
-	err := decoder.Decode(&fileInfo)
+	err := decoder.Decode(&nodeInfo)
 
 	if err != nil {
 		http.Error(writer, err.Error(), 400)
@@ -203,16 +183,16 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 
 	changes := []func() error{
 		func() error {
-			return file.Mv(fileInfo.Name, file.Parent().Id)
+			return restApi.graph.MoveNode(node, nodeInfo.Name, node.Parent().Id)
 		},
 		func() error {
-			return file.Chmod(os.FileMode(fileInfo.Attr))
+			return node.Chmod(os.FileMode(nodeInfo.Mode))
 		},
 		func() error {
-			return file.Touch(fileInfo.MTime)
+			return node.Touch(nodeInfo.MTime)
 		},
 		func() error {
-			return file.Resize(fileInfo.Size)
+			return node.Resize(nodeInfo.Size)
 		},
 	}
 
@@ -227,30 +207,30 @@ func Update(writer http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// GET v1/hasBlocks/{fileId}/blocks
+// GET v1/hasBlocks/{nodeId}/blocks
 // returns -> [BlockInfo] (hashes we don't have)
-func Blocks(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req))
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+func (restApi OlympusApi) Blocks(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
-	} else if file.IsDir() {
-		http.Error(writer, fmt.Sprintf("File with id: %s is a directory", file.Id), 400)
+	} else if node.IsDir() {
+		http.Error(writer, fmt.Sprintf("Node with id: %s is a directory", node.Id), 400)
 		return
 	}
 
-	blocks := file.Blocks()
+	blocks := node.Blocks()
 
 	writer.WriteHeader(200)
 	encoder := encoderFromHeader(writer, req.Header)
 	encoder.Encode(blocks)
 }
 
-// POST v1/dd/{fileId}/{offset}
-func WriteBlock(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req))
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+// POST v1/dd/{nodeId}/{offset}
+func (restApi OlympusApi) WriteBlock(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
 	}
 
@@ -265,19 +245,19 @@ func WriteBlock(writer http.ResponseWriter, req *http.Request) {
 	offsetString := paramFromRequest("offset", req)
 	if offset, err := strconv.ParseInt(offsetString, 10, 64); err != nil {
 		http.Error(writer, fmt.Sprintf("Invalid offset parameter: %s", offsetString), 400)
-	} else if err := file.WriteData(data, offset); err != nil {
+	} else if err := node.WriteData(data, offset); err != nil {
 		http.Error(writer, err.Error(), 400)
 	}
 }
 
-// GET cat/{fileId}/{offset}
-func ReadBlock(writer http.ResponseWriter, req *http.Request) {
-	file := fs.FileWithId(paramFromRequest("fileId", req))
-	if !file.Exists() {
-		writeFileNotFoundError(file, writer)
+// GET cat/{nodeId}/{offset}
+func (restApi OlympusApi) ReadBlock(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
 		return
-	} else if file.IsDir() {
-		http.Error(writer, fmt.Sprintf("Requested file id %s is a directory", file.Id), 400)
+	} else if node.IsDir() {
+		http.Error(writer, fmt.Sprintf("Requested node id %s is a directory", node.Id), 400)
 		return
 	}
 
@@ -285,10 +265,10 @@ func ReadBlock(writer http.ResponseWriter, req *http.Request) {
 	if offset, err := strconv.ParseInt(offsetString, 10, 64); err != nil {
 		http.Error(writer, fmt.Sprintf("Invalid offset parameter: %s", offsetString), 400)
 	} else {
-		block := file.BlockWithOffset(offset)
+		block := node.BlockWithOffset(offset)
 
 		if block == "" {
-			http.Error(writer, fmt.Sprintf("Block with id: %s does not belong to file with id: %s", block, file.Id), 404)
+			http.Error(writer, fmt.Sprintf("Block with id: %s does not belong to node with id: %s", block, node.Id), 404)
 		} else {
 			http.Redirect(writer, req, "/v1/block/"+string(block), http.StatusFound)
 		}
@@ -300,7 +280,7 @@ func paramFromRequest(key string, req *http.Request) string {
 	return vars[key]
 }
 
-func writeFileNotFoundError(file *fs.OFile, writer http.ResponseWriter) {
+func writeNodeNotFoundError(node *graph.Node, writer http.ResponseWriter) {
 	writer.WriteHeader(400)
-	writer.Write([]byte(fmt.Sprintf("File with id: %s does not exist", file.Id)))
+	writer.Write([]byte(fmt.Sprintf("Node with id: %s does not exist", node.Id)))
 }

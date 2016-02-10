@@ -3,24 +3,22 @@ package apiclient
 import (
 	"bytes"
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
-	"github.com/sdcoffey/olympus/fs"
+	"github.com/sdcoffey/olympus/graph"
 )
 
 type OlympusClient interface {
-	ListFiles(parentId string) ([]fs.FileInfo, error)
-	CreateDirectory(parentId, name string) (string, error)
-	MoveFile(fileid, newParentId, newName string) error
-	RemoveFile(fileId string) error
-	CreateFile(info fs.FileInfo) (fs.FileInfo, error)
-	UpdateFile(info fs.FileInfo) error
-	HasBlocks(fileId string, blocks []string) ([]string, error)
-	SendBlock(fileId string, block fs.BlockInfo, data io.Reader) error
+	ListNodes(parentId string) ([]graph.NodeInfo, error)
+	MoveNode(nodeid, newParentId, newName string) error
+	RemoveNode(nodeId string) error
+	CreateNode(info graph.NodeInfo) (graph.NodeInfo, error)
+	UpdateNode(info graph.NodeInfo) error
+	HasBlocks(nodeId string, blocks []string) ([]string, error)
+	SendBlock(nodeId string, block graph.BlockInfo, data io.Reader) error
 }
 
 type ApiClient struct {
@@ -31,17 +29,17 @@ func (client ApiClient) url(method string) string {
 	return fmt.Sprint(client.Address, "/v1/", method)
 }
 
-func (client ApiClient) ListFiles(parentId string) ([]fs.FileInfo, error) {
+func (client ApiClient) ListNodes(parentId string) ([]graph.NodeInfo, error) {
 	url := client.url(fmt.Sprintf("ls/%s", parentId))
 	if request, err := http.NewRequest("GET", url, nil); err != nil {
-		return make([]fs.FileInfo, 0), err
+		return make([]graph.NodeInfo, 0), err
 	} else {
 		request.Header.Add("Accept", "application/gob")
 		if resp, err := http.DefaultClient.Do(request); err != nil {
-			return make([]fs.FileInfo, 0), err
+			return make([]graph.NodeInfo, 0), err
 		} else {
 			defer resp.Body.Close()
-			var infos []fs.FileInfo
+			var infos []graph.NodeInfo
 			decoder := gob.NewDecoder(resp.Body)
 			err = decoder.Decode(&infos)
 
@@ -50,29 +48,8 @@ func (client ApiClient) ListFiles(parentId string) ([]fs.FileInfo, error) {
 	}
 }
 
-func (client ApiClient) CreateDirectory(parentId, name string) (string, error) {
-	url := client.url(fmt.Sprintf("mkdir/%s/%s", parentId, name))
-	if request, err := http.NewRequest("POST", url, nil); err != nil {
-		return "", err
-	} else {
-		request.Header.Add("Accept", "application/gob")
-		if resp, err := http.DefaultClient.Do(request); err != nil {
-			return "", err
-		} else {
-			var id string
-			defer resp.Body.Close()
-			decoder := gob.NewDecoder(resp.Body)
-			if decoder.Decode(&decoder); resp.StatusCode != 200 {
-				return "", errors.New(string(id))
-			} else {
-				return string(id), nil
-			}
-		}
-	}
-}
-
-func (client ApiClient) MoveFile(fileId, newParentId, newName string) error {
-	url := client.url(fmt.Sprintf("mv/%s/%s", fileId, newParentId))
+func (client ApiClient) MoveNode(nodeId, newParentId, newName string) error {
+	url := client.url(fmt.Sprintf("mv/%s/%s", nodeId, newParentId))
 	if request, err := http.NewRequest("PATCH", url, nil); err != nil {
 		return err
 	} else {
@@ -84,8 +61,8 @@ func (client ApiClient) MoveFile(fileId, newParentId, newName string) error {
 	}
 }
 
-func (client ApiClient) RemoveFile(fileId string) error {
-	url := client.url(fmt.Sprintf("rm/%s", fileId))
+func (client ApiClient) RemoveNode(nodeId string) error {
+	url := client.url(fmt.Sprintf("rm/%s", nodeId))
 	if request, err := http.NewRequest("DELETE", url, nil); err != nil {
 		return err
 	} else {
@@ -94,25 +71,25 @@ func (client ApiClient) RemoveFile(fileId string) error {
 	}
 }
 
-func (client ApiClient) CreateFile(info fs.FileInfo) (fs.FileInfo, error) {
+func (client ApiClient) CreateNode(info graph.NodeInfo) (graph.NodeInfo, error) {
 	url := client.url(fmt.Sprintf("cr/%s/%s", info.ParentId, info.Name))
 	body := new(bytes.Buffer)
 	encoder := gob.NewEncoder(body)
 	if err := encoder.Encode(info); err != nil {
-		return fs.FileInfo{}, err
+		return graph.NodeInfo{}, err
 	} else if request, err := http.NewRequest("POST", url, body); err != nil {
-		return fs.FileInfo{}, err
+		return graph.NodeInfo{}, err
 	} else {
 		request.Header.Add("Accept", "application/gob")
 		request.Header.Add("Content-Type", "application/gob")
 		if resp, err := http.DefaultClient.Do(request); err != nil {
-			return fs.FileInfo{}, err
+			return graph.NodeInfo{}, err
 		} else {
 			defer resp.Body.Close()
-			var fi fs.FileInfo
+			var fi graph.NodeInfo
 			decoder := gob.NewDecoder(resp.Body)
 			if err = decoder.Decode(&fi); err != nil {
-				return fs.FileInfo{}, err
+				return graph.NodeInfo{}, err
 			} else {
 				return fi, nil
 			}
@@ -120,11 +97,11 @@ func (client ApiClient) CreateFile(info fs.FileInfo) (fs.FileInfo, error) {
 	}
 }
 
-func (client ApiClient) UpdateFile(fileInfo fs.FileInfo) error {
-	url := client.url(fmt.Sprintf("update/%s", fileInfo.Id))
+func (client ApiClient) UpdateNode(nodeInfo graph.NodeInfo) error {
+	url := client.url(fmt.Sprintf("update/%s", nodeInfo.Id))
 	body := new(bytes.Buffer)
 	encoder := gob.NewEncoder(body)
-	if err := encoder.Encode(fileInfo); err != nil {
+	if err := encoder.Encode(nodeInfo); err != nil {
 		return err
 	} else if request, err := http.NewRequest("PATCH", url, body); err != nil {
 		return err
@@ -135,8 +112,8 @@ func (client ApiClient) UpdateFile(fileInfo fs.FileInfo) error {
 	}
 }
 
-func (client ApiClient) HasBlocks(fileId string, blocks []string) ([]string, error) {
-	url := client.url(fmt.Sprintf("hasBlocks/%s", fileId))
+func (client ApiClient) HasBlocks(nodeId string, blocks []string) ([]string, error) {
+	url := client.url(fmt.Sprintf("hasBlocks/%s", nodeId))
 	hashList := strings.Join(blocks, ",")
 
 	if request, err := http.NewRequest("GET", url, nil); err != nil {
@@ -160,8 +137,8 @@ func (client ApiClient) HasBlocks(fileId string, blocks []string) ([]string, err
 	}
 }
 
-func (client ApiClient) SendBlock(fileId string, block fs.BlockInfo, data io.Reader) error {
-	url := client.url(fmt.Sprintf("dd/%s/%s/%d", fileId, block.Hash, block.Offset))
+func (client ApiClient) SendBlock(nodeId string, block graph.BlockInfo, data io.Reader) error {
+	url := client.url(fmt.Sprintf("dd/%s/%s/%d", nodeId, block.Hash, block.Offset))
 
 	if request, err := http.NewRequest("POST", url, data); err != nil {
 		return err
