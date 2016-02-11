@@ -72,7 +72,7 @@ func (client ApiClient) RemoveNode(nodeId string) error {
 }
 
 func (client ApiClient) CreateNode(info graph.NodeInfo) (graph.NodeInfo, error) {
-	url := client.url(fmt.Sprintf("cr/%s/%s", info.ParentId, info.Name))
+	url := client.url(fmt.Sprintf("cr/%s", info.ParentId))
 	body := new(bytes.Buffer)
 	encoder := gob.NewEncoder(body)
 	if err := encoder.Encode(info); err != nil {

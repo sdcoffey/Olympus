@@ -19,7 +19,6 @@ var debug = false
 func main() {
 	env.InitializeEnvironment()
 	if nodeGraph, err := initDb(); err != nil {
-		println(err.Error())
 		os.Exit(1)
 	} else {
 		go peer.ClientHeartbeat()

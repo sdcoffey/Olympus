@@ -119,7 +119,6 @@ func ls(c *cli.Context) {
 				name := node.Name()
 				var col string
 				if node.IsDir() {
-					col = "@b"
 					name += "/"
 				}
 				color.Print(col, name, "    ")
@@ -143,7 +142,7 @@ func cd(c *cli.Context) {
 		if model.Root.Parent() == nil {
 			return
 		} else if model, err = manager.Model(model.Root.Parent().Id); err != nil {
-			color.Println("@r", err.Error())
+			panic(err)
 		}
 	} else if node := model.FindNodeByName(dirname); node == nil {
 		color.Println("@rNo such node: ", dirname)
@@ -161,6 +160,8 @@ func mkdir(c *cli.Context) {
 
 	if err := manager.CreateDirectory(model.Root.Id, name); err != nil {
 		color.Println("@r", err.Error())
+	} else {
+		model.Refresh()
 	}
 }
 

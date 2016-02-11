@@ -25,11 +25,11 @@ build-cli: clean
 
 install:
 	@ps aux | grep [o]lympus | awk '{print $$2}' | xargs kill -9
-	cp build/executables/server /usr/local/bin/olympus
+	cp build/bin/server /usr/local/bin/olympus
 	@olympus&
 
 install-cli:
-	cp build/executables/cli /usr/local/bin/olympus-cli
+	cp build/bin/cli /usr/local/bin/olympus-cli
 
 test: clean
 	@go test -v ./...

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 
+	"code.google.com/p/go-uuid/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
@@ -150,13 +151,14 @@ func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Reque
 		http.Error(writer, fmt.Sprintf("Node exists, call /v1/touch/%s/to update this object", node.Id), 400)
 	} else {
 		nodeInfo.ParentId = parent.Id
-		newnode := restApi.graph.NodeWithNodeInfo(nodeInfo)
-		if err := newnode.Save(); err != nil {
+		newNode := restApi.graph.NodeWithNodeInfo(nodeInfo)
+		newNode.Id = uuid.New()
+		if err := newNode.Save(); err != nil {
 			http.Error(writer, err.Error(), 400)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)
 			writer.WriteHeader(200)
-			nodeInfo = newnode.NodeInfo()
+			nodeInfo = newNode.NodeInfo()
 			encoder.Encode(nodeInfo)
 		}
 	}

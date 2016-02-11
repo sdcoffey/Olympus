@@ -47,10 +47,8 @@ func (model *Model) Refresh() error {
 		for i := 0; i < len(nodeInfos) && err == nil; i++ {
 			nodeInfo := nodeInfos[i]
 			node := model.graph.NodeWithNodeInfo(nodeInfo)
-			err = node.Save()
-			if err != nil {
-				fmt.Println(err)
-				fmt.Println(nodeInfo)
+			if err = node.Save(); err != nil {
+				return err
 			}
 			if _, ok := nodeSet[nodeInfo.Id]; ok {
 				delete(nodeSet, nodeInfo.Id)

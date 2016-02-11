@@ -1,13 +1,16 @@
 package api
 
 import (
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/graph"
@@ -77,7 +80,7 @@ func TestListNodes_returnsErrorIfFileNotExist(t *testing.T) {
 }
 
 func TestLsFiles_returnsFilesForValidParent(t *testing.T) {
-	cleanFs()
+	cleanGraph()
 
 	req := request("GET", "/ls/"+graph.RootNodeId, nil)
 	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
@@ -96,7 +99,7 @@ func TestLsFiles_returnsFilesForValidParent(t *testing.T) {
 }
 
 func TestRmFile_returnsErrorIfFileNotExist(t *testing.T) {
-	cleanFs()
+	cleanGraph()
 
 	req := request("DELETE", "/rm/child", nil)
 
@@ -108,7 +111,7 @@ func TestRmFile_returnsErrorIfFileNotExist(t *testing.T) {
 }
 
 func TestRmFile_removesFileSuccessfully(t *testing.T) {
-	cleanFs()
+	cleanGraph()
 
 	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
 	req := request("DELETE", "/rm/"+node.Id, nil)
@@ -121,7 +124,7 @@ func TestRmFile_removesFileSuccessfully(t *testing.T) {
 }
 
 func TestMvFile_returnsErrorIfFileNotExist(t *testing.T) {
-	cleanFs()
+	cleanGraph()
 
 	req := request("PATCH", "/mv/not-an-id/"+nodeGraph.RootNode.Id, nil)
 
@@ -132,7 +135,7 @@ func TestMvFile_returnsErrorIfFileNotExist(t *testing.T) {
 }
 
 func TestMvFile_returnsErrorIfNewParentNotExist(t *testing.T) {
-	cleanFs()
+	cleanGraph()
 
 	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
 	req := request("PATCH", "/mv/"+node.Id+"/not-a-parent", nil)
@@ -144,7 +147,7 @@ func TestMvFile_returnsErrorIfNewParentNotExist(t *testing.T) {
 }
 
 func TestMvFile_movesFileSuccessfully(t *testing.T) {
-	cleanFs()
+	cleanGraph()
 
 	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
 	node2, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
@@ -157,8 +160,6 @@ func TestMvFile_movesFileSuccessfully(t *testing.T) {
 
 	assert.EqualValues(t, 1, len(nodeGraph.RootNode.Children()))
 	assert.EqualValues(t, 1, len(node2.Children()))
-
-	//todo: moved file has different attrs - WHY
 }
 
 func TestMvFile_renameInPlaceWorksSuccessfully(t *testing.T) {
@@ -167,6 +168,43 @@ func TestMvFile_renameInPlaceWorksSuccessfully(t *testing.T) {
 
 func TestMvFile_renameAndMoveWorksSuccessfully(t *testing.T) {
 
+}
+
+func TestCreateNode_createsNode(t *testing.T) {
+	cleanGraph()
+
+	info := graph.NodeInfo{
+		Name:     "a",
+		ParentId: nodeGraph.RootNode.Id,
+		Size:     0,
+		Mode:     uint32(os.ModeDir),
+		MTime:    time.Now(),
+	}
+	body := new(bytes.Buffer)
+	encoder := json.NewEncoder(body)
+	encoder.Encode(info)
+	req := request("POST", "/cr/"+info.ParentId, body)
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+
+	var decodedInfo graph.NodeInfo
+	decoder := json.NewDecoder(resp.Body)
+	assert.NoError(t, decoder.Decode(&decodedInfo))
+
+	assert.Equal(t, info.Name, decodedInfo.Name)
+	assert.Equal(t, info.ParentId, decodedInfo.ParentId)
+	assert.EqualValues(t, info.Size, decodedInfo.Size)
+	assert.EqualValues(t, info.Mode, decodedInfo.Mode)
+	assert.EqualValues(t, info.MTime.Unix(), decodedInfo.MTime.Unix())
+	assert.NotEqual(t, "", decodedInfo.Id)
+
+	cloudNode := nodeGraph.NodeWithId(decodedInfo.Id)
+	assert.True(t, cloudNode.Exists())
+	assert.Equal(t, cloudNode.Name(), decodedInfo.Name)
+	assert.Equal(t, cloudNode.Parent().Id, decodedInfo.ParentId)
+	assert.EqualValues(t, cloudNode.Size(), decodedInfo.Size)
+	assert.EqualValues(t, cloudNode.Mode(), decodedInfo.Mode)
+	assert.EqualValues(t, cloudNode.MTime().Unix(), decodedInfo.MTime.Unix())
 }
 
 func request(method, path string, body io.Reader) *http.Request {
@@ -184,7 +222,7 @@ func msg(resp *http.Response) string {
 	return string(dat)
 }
 
-func cleanFs() {
+func cleanGraph() {
 	for _, child := range nodeGraph.RootNode.Children() {
 		nodeGraph.RemoveNode(child)
 	}
