@@ -1,7 +1,10 @@
 package shared
 
 import (
+	"bytes"
+	"errors"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/cayley"
@@ -58,4 +61,47 @@ func (manager *Manager) MoveNode(nodeId, newParentId, newName string) error {
 	}
 
 	return nil
+}
+
+func (manager *Manager) UploadFile(parentId, localPath string) (*graph.Node, error) {
+	if fi, err := os.Stat(localPath); err != nil {
+		return nil, err
+	} else if fi.IsDir() {
+		return nil, errors.New("Cannot upload a directory")
+	} else {
+		nodeInfo := graph.NodeInfo{
+			Name:     filepath.Base(fi.Name()),
+			Size:     fi.Size(),
+			Mode:     0700,
+			MTime:    time.Now(),
+			ParentId: parentId,
+		}
+		if newNode, err := manager.api.CreateNode(nodeInfo); err != nil {
+			return nil, err
+		} else if localFile, err := os.Open(localPath); err != nil {
+			return nil, err
+		} else {
+			defer localFile.Close()
+			var i int64
+			for i = 0; i < fi.Size(); i += graph.BLOCK_SIZE {
+				buf := make([]byte, min(fi.Size()-i, graph.BLOCK_SIZE))
+				if _, err = localFile.ReadAt(buf, i); err != nil {
+					return nil, err
+				}
+				rd := bytes.NewBuffer(buf)
+				if err := manager.api.SendBlock(newNode.Id, i, rd); err != nil {
+					return nil, err
+				}
+			}
+			return manager.graph.NodeWithNodeInfo(newNode), err
+		}
+	}
+}
+
+func min(a, b int64) int64 {
+	if a < b {
+		return a
+	} else {
+		return b
+	}
 }

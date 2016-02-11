@@ -76,6 +76,11 @@ func main() {
 			Action: rm,
 		},
 		{
+			Name:   "put",
+			Usage:  "Upload file",
+			Action: put,
+		},
+		{
 			Name:  "exit",
 			Usage: "Exit Olympus Cli",
 			Action: func(c *cli.Context) {
@@ -180,6 +185,19 @@ func rm(c *cli.Context) {
 		color.Println("@rNo such node: ", victim)
 	} else if err := manager.RemoveNode(node.Id); err != nil {
 		color.Println("@r", err.Error())
+	}
+}
+
+func put(c *cli.Context) {
+	if len(c.Args()) < 1 {
+		color.Println("@yNot enough arguments in call to rm")
+		return
+	}
+	target := c.Args()[0]
+	if _, err := manager.UploadFile(model.Root.Id, target); err != nil {
+		color.Println(fmt.Sprintf("@rError uploading %s: %s", target, err.Error()))
+	} else {
+		model.Refresh()
 	}
 }
 
