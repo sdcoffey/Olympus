@@ -134,7 +134,7 @@ func (client fakeApiClient) HasBlocks(nodeId string, blocks []string) ([]string,
 	return []string{}, nil
 }
 
-func (client fakeApiClient) SendBlock(nodeId string, block graph.BlockInfo, data io.Reader) error {
+func (client fakeApiClient) SendBlock(nodeId string, offset int64, data io.Reader) error {
 	return nil
 }
 
