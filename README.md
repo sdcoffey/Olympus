@@ -11,6 +11,8 @@ Currently in pre-beta, Olympus is nearly fully-implemented on the server-side, b
  - `pwd`
  - `cd`
  - `rm`
+ - `put`
+ - `help`
 
 You can run Olympus on any machine on your local network. Client/server discovery happens automatically via UDP when you start your client.
 
