@@ -1,0 +1,40 @@
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#header {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 60px;
+  background-color: #dedede;
+}
+
+#main-list {
+  position: absolute;
+  top: 60px;
+  width: 100%;
+}
+
+.listview {
+  display: table-row-group;
+  width: 100%;
+}
+
+.listview-item {
+  display: table-row;
+  height: 30px;
+  width: 100%;
+}
+
+.left {
+  left: 10%;
+}
+
+.left, .middle, .right {
+ display: table-cell; 
+ vertical-align: middle;
+ margin-left: 30px;
+}
+

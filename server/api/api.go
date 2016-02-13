@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -16,6 +17,14 @@ import (
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 )
+
+var (
+	listTemplate *template.Template
+)
+
+func init() {
+	listTemplate = template.Must(template.ParseFiles("/usr/local/etc/olympus/www/template/listview.html"))
+}
 
 type Encoder interface {
 	Encode(interface{}) error
@@ -36,6 +45,7 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 
 	restApi := OlympusApi{r, ng}
 
+	v1Router.HandleFunc("/web/ls/{parentId}", restApi.ListNodesWeb).Methods("GET")
 	v1Router.HandleFunc("/ls/{parentId}", restApi.ListNodes).Methods("GET")
 	v1Router.HandleFunc("/ls/{nodeId}/blocks", restApi.Blocks).Methods("GET")
 	v1Router.HandleFunc("/mv/{nodeId}/{newParentId}", restApi.MoveNode).Methods("PATCH")
@@ -46,8 +56,10 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 	v1Router.HandleFunc("/cat/{nodeId}/{offset}", restApi.ReadBlock).Methods("GET")
 	v1Router.HandleFunc("/dl/{nodeId}", restApi.DownloadFile).Methods("GET")
 
-	fileServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
-	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", fileServer))
+	blockServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
+	htmlServer := http.FileServer(http.Dir("/usr/local/etc/olympus/www"))
+	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", blockServer))
+	r.PathPrefix("/").Handler(htmlServer)
 
 	return restApi
 }
@@ -94,9 +106,31 @@ func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Reques
 		response[idx] = child.NodeInfo()
 	}
 
+	return response
+}
+
+func (restApi OlympusApi) ListNodesWeb(writer http.ResponseWriter, req *http.Request) {
+	parentNode := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
+	if !parentNode.Exists() {
+		writeNodeNotFoundError(parentNode, writer)
+		// write 404 template
+		return
+	}
+
+	listTemplate.Execute(writer, restApi.listNodes(parentNode))
+}
+
+// GET v1/ls/{parentId}
+func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Request) {
+	parentNode := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
+	if !parentNode.Exists() {
+		writeNodeNotFoundError(parentNode, writer)
+		return
+	}
+
 	encoder := encoderFromHeader(writer, req.Header)
 	writer.WriteHeader(http.StatusOK)
-	encoder.Encode(response)
+	encoder.Encode(restApi.listNodes(parentNode))
 }
 
 // DELETE /v1/rm/{nodeId}
