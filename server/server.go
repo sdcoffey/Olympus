@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/cayley"
-	cgraph "github.com/google/cayley/graph"
-	_ "github.com/google/cayley/graph/bolt"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
+	cgraph "github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley/graph"
+	_ "github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley/graph/bolt"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/cayley"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/env"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewNode_hasUuidAndTimeStamp(t *testing.T) {

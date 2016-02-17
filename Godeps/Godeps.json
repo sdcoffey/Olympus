@@ -1,0 +1,59 @@
+{
+	"ImportPath": "github.com/sdcoffey/olympus",
+	"GoVersion": "go1.5",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "code.google.com/p/go-uuid/uuid",
+			"Comment": "null-15",
+			"Rev": "'35bc42037350f0078e3c974c6ea690f1926603ab'"
+		},
+		{
+			"ImportPath": "github.com/barakmich/glog",
+			"Rev": "fafcb6128a8a2e6360ff034091434d547397d54a"
+		},
+		{
+			"ImportPath": "github.com/boltdb/bolt",
+			"Comment": "v1.0-62-gee95430",
+			"Rev": "ee954308d64186f0fc9b7022b6178977848c17a3"
+		},
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-215-g0ab42fd",
+			"Rev": "0ab42fd482c27cf2c95e7794ad3bb2082c2ab2d7"
+		},
+		{
+			"ImportPath": "github.com/gogo/protobuf/proto",
+			"Comment": "v0.1-78-gd3235f0",
+			"Rev": "d3235f01ecae4901dd9f7ea6af57a352c0189deb"
+		},
+		{
+			"ImportPath": "github.com/google/cayley",
+			"Comment": "v0.4.1-168-gf143602",
+			"Rev": "f143602b8ae880ec975e4c154dd010047de80c1f"
+		},
+		{
+			"ImportPath": "github.com/gorilla/context",
+			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
+		},
+		{
+			"ImportPath": "github.com/gorilla/mux",
+			"Rev": "9c068cf16d982f8bd444b8c352acbeec34c4fe5b"
+		},
+		{
+			"ImportPath": "github.com/pborman/uuid",
+			"Rev": "cccd189d45f7ac3368a0d127efb7f4d08ae0b655"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/assert",
+			"Comment": "v1.0-47-ga979bdb",
+			"Rev": "a979bdb3ad236b6a9f508e352e1202779149e8b6"
+		},
+		{
+			"ImportPath": "github.com/wsxiaoys/terminal/color",
+			"Rev": "9dcaf1d63119a8ac00eef82270eaef08b6aa2328"
+		}
+	]
+}

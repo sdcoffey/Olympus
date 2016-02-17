@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/env"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestReader_returnsCorrectReader(t *testing.T) {

@@ -1,17 +1,17 @@
-var files = ['index.html', 'template/*.html', 'style/*.css'];
+var files = ['app/**'];
 
 module.exports = function(grunt) {
   grunt.initConfig({
     watch: {
       scripts: {
-        files: files,
+        files: ['app/**'],
         tasks: ['copy']
       },
     },
     copy: {
       main: {
         files: [
-          {expand: true, src: files, dest: '/usr/local/etc/olympus/www'},
+          {expand: true, cwd: 'app/', src: ['**'], dest: '/usr/local/etc/olympus/www'},
         ],
       },
     },

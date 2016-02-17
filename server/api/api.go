@@ -12,18 +12,20 @@ import (
 	"strconv"
 	"time"
 
-	"code.google.com/p/go-uuid/uuid"
-	"github.com/gorilla/mux"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 )
 
 var (
+	rootTemplate *template.Template
 	listTemplate *template.Template
 )
 
 func init() {
-	listTemplate = template.Must(template.ParseFiles("/usr/local/etc/olympus/www/template/listview.html"))
+	rootTemplate = template.Must(template.ParseFiles("/var/www/index.html"))
+	listTemplate = template.Must(template.ParseFiles("/var/www/listview.html"))
 }
 
 type Encoder interface {
@@ -45,7 +47,6 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 
 	restApi := OlympusApi{r, ng}
 
-	v1Router.HandleFunc("/web/ls/{parentId}", restApi.ListNodesWeb).Methods("GET")
 	v1Router.HandleFunc("/ls/{parentId}", restApi.ListNodes).Methods("GET")
 	v1Router.HandleFunc("/ls/{nodeId}/blocks", restApi.Blocks).Methods("GET")
 	v1Router.HandleFunc("/mv/{nodeId}/{newParentId}", restApi.MoveNode).Methods("PATCH")
@@ -57,9 +58,11 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 	v1Router.HandleFunc("/dl/{nodeId}", restApi.DownloadFile).Methods("GET")
 
 	blockServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
-	htmlServer := http.FileServer(http.Dir("/usr/local/etc/olympus/www"))
-	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", blockServer))
-	r.PathPrefix("/").Handler(htmlServer)
+	r.Handle("/block/{blockId}", http.StripPrefix("/block/", blockServer))
+
+	r.HandleFunc("/gaze/{parentId}", restApi.Index).Methods("GET")
+	r.HandleFunc("/", restApi.Main).Methods("GET")
+	v1Router.HandleFunc("/listview/{parentId}", restApi.Listview).Methods("GET")
 
 	return restApi
 }
@@ -109,7 +112,17 @@ func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Reques
 	return response
 }
 
-func (restApi OlympusApi) ListNodesWeb(writer http.ResponseWriter, req *http.Request) {
+func (restApi OlympusApi) Main(writer http.ResponseWriter, req *http.Request) {
+	// TODO: check auth, redirect to login
+	http.Redirect(writer, req, "/gaze/rootNode", http.StatusFound)
+}
+
+func (restApi OlympusApi) Index(writer http.ResponseWriter, req *http.Request) {
+	parentNodeId := paramFromRequest("parentId", req)
+	rootTemplate.Execute(writer, parentNodeId)
+}
+
+func (restApi OlympusApi) Listview(writer http.ResponseWriter, req *http.Request) {
 	parentNode := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
 	if !parentNode.Exists() {
 		writeNodeNotFoundError(parentNode, writer)

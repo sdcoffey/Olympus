@@ -1,0 +1,20 @@
+proxy:
+  container_name: nginx
+  image: nginx:latest
+  net: "host"
+  links:
+    - olympus:olympus
+  volumes:
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    - ./client/www/app/static:/var/www/static/:ro
+  ports:
+    - "80:80"
+olympus:
+  container_name: olympus
+  environment:
+    OLYMPUS_HOME: /olympus/
+  build: .
+  ports:
+    - "3000"
+    - "5353:5353/udp"
+

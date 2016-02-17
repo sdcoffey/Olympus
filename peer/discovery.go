@@ -43,7 +43,7 @@ func ClientHeartbeat() {
 		ticker := time.Tick(time.Second) // todo config
 		for {
 			<-ticker
-			if _, err := connection.Write([]byte("HELLO")); err != nil {
+			if _, err := connection.Write([]byte("!")); err != nil {
 				fmt.Println(err.Error())
 			}
 		}

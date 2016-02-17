@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"code.google.com/p/go-uuid/uuid"
-	"github.com/google/cayley"
-	"github.com/google/cayley/graph"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley/graph"
 )
 
 const (

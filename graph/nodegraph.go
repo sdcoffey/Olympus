@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/cayley"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
 )
 
 const RootNodeId = "rootNode"
