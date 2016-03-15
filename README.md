@@ -42,3 +42,5 @@ Data and config files are, by default, stored in a the current users's home dire
  - HTTP/2 Support
  - Expanded runtime configuration options
  - Remote instance support
+ - Remote data stores (S3, remote server)
+ - Dockerization
