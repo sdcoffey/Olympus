@@ -1,7 +1,6 @@
 proxy:
   container_name: nginx
   image: nginx:latest
-  net: "host"
   links:
     - olympus:olympus
   volumes:
@@ -16,5 +15,3 @@ olympus:
   build: .
   ports:
     - "3000"
-    - "5353:5353/udp"
-

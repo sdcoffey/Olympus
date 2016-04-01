@@ -23,7 +23,7 @@ build-cli: clean
 	@mkdir -p build/bin
 	go build -o build/bin/cli github.com/sdcoffey/olympus/client/cli
 
-install: copy-resources
+install: 
 	@ps aux | grep [o]lympus | awk '{print $$2}' | xargs kill -9
 	cp build/bin/server /usr/local/bin/olympus
 	@olympus&
