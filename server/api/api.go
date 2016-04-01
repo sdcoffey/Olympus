@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -17,16 +16,6 @@ import (
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 )
-
-var (
-	rootTemplate *template.Template
-	listTemplate *template.Template
-)
-
-func init() {
-	rootTemplate = template.Must(template.ParseFiles("/var/www/index.html"))
-	listTemplate = template.Must(template.ParseFiles("/var/www/listview.html"))
-}
 
 type Encoder interface {
 	Encode(interface{}) error
@@ -59,10 +48,6 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 
 	blockServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
 	r.Handle("/block/{blockId}", http.StripPrefix("/block/", blockServer))
-
-	r.HandleFunc("/gaze/{parentId}", restApi.Index).Methods("GET")
-	r.HandleFunc("/", restApi.Main).Methods("GET")
-	v1Router.HandleFunc("/listview/{parentId}", restApi.Listview).Methods("GET")
 
 	return restApi
 }
@@ -110,27 +95,6 @@ func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Reques
 	}
 
 	return response
-}
-
-func (restApi OlympusApi) Main(writer http.ResponseWriter, req *http.Request) {
-	// TODO: check auth, redirect to login
-	http.Redirect(writer, req, "/gaze/rootNode", http.StatusFound)
-}
-
-func (restApi OlympusApi) Index(writer http.ResponseWriter, req *http.Request) {
-	parentNodeId := paramFromRequest("parentId", req)
-	rootTemplate.Execute(writer, parentNodeId)
-}
-
-func (restApi OlympusApi) Listview(writer http.ResponseWriter, req *http.Request) {
-	parentNode := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
-	if !parentNode.Exists() {
-		writeNodeNotFoundError(parentNode, writer)
-		// write 404 template
-		return
-	}
-
-	listTemplate.Execute(writer, restApi.listNodes(parentNode))
 }
 
 // GET v1/ls/{parentId}
