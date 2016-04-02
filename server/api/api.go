@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -79,15 +80,31 @@ func (restApi OlympusApi) DownloadFile(writer http.ResponseWriter, req *http.Req
 	http.ServeContent(writer, req, node.Name(), node.MTime(), node.ReadSeeker())
 }
 
-// GET v1/ls/{parentId}
-func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Request) {
-	node := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
-	if !node.Exists() {
-		writeNodeNotFoundError(node, writer)
-		return
+func (restApi OlympusApi) listNodes(parentNode *graph.Node, watermark, limit int) []graph.NodeInfo {
+	minI := func(lhs, rhs int) int {
+		if lhs > rhs {
+			return lhs
+		} else {
+			return rhs
+		}
 	}
 
-	children := node.Children()
+	children := parentNode.Children()
+	var start, end int
+
+	if watermark > 0 && watermark < len(children) {
+		start = watermark
+	} else {
+		start = 0
+	}
+
+	if limit > 0 {
+		end = minI(watermark+limit, len(children))
+	} else {
+		end = len(children)
+	}
+
+	children = children[start:end]
 	response := make([]graph.NodeInfo, len(children))
 
 	for idx, child := range children {
@@ -97,7 +114,7 @@ func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Reques
 	return response
 }
 
-// GET v1/ls/{parentId}
+// GET v1/ls/{parentId}?watermark=<int>&limit=<int>
 func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Request) {
 	parentNode := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
 	if !parentNode.Exists() {
@@ -105,9 +122,23 @@ func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	watermark, limit := -1, -1
+
+	watermarkVals := req.URL.Query()["watermark"]
+	limitVals := req.URL.Query()["limit"]
+
+	if len(watermarkVals) > 0 {
+		w, _ := strconv.ParseInt(watermarkVals[0], 10, 64)
+		watermark = int(w)
+	}
+	if len(limitVals) > 0 {
+		l, _ := strconv.ParseInt(limitVals[0], 10, 64)
+		limit = int(l)
+	}
+
 	encoder := encoderFromHeader(writer, req.Header)
 	writer.WriteHeader(http.StatusOK)
-	encoder.Encode(restApi.listNodes(parentNode))
+	encoder.Encode(restApi.listNodes(parentNode, watermark, limit))
 }
 
 // DELETE /v1/rm/{nodeId}
