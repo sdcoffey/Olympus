@@ -92,10 +92,51 @@ func TestLsFiles_returnsFilesForValidParent(t *testing.T) {
 	decoder := json.NewDecoder(resp.Body)
 	var files []graph.NodeInfo
 	decoder.Decode(&files)
+
 	assert.Len(t, files, 1)
 
 	file := files[0]
 	assert.Equal(t, "child", file.Name)
+}
+
+func TestLsFiles_returnsNFilesWhenLimitProvided(t *testing.T) {
+	cleanGraph()
+	req := request("GET", "/ls/"+graph.RootNodeId+"?limit=1", nil)
+	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child1")
+	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 200, resp.StatusCode)
+
+	decoder := json.NewDecoder(resp.Body)
+	var files []graph.NodeInfo
+	decoder.Decode(&files)
+
+	assert.Len(t, files, 1)
+
+	file := files[0]
+	assert.Equal(t, "child1", file.Name)
+}
+
+func TestLsFiles_startsWithNFileWhenWatermarkProvided(t *testing.T) {
+	cleanGraph()
+	req := request("GET", "/ls/"+graph.RootNodeId+"?watermark=1", nil)
+	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child1")
+	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 200, resp.StatusCode)
+
+	decoder := json.NewDecoder(resp.Body)
+	var files []graph.NodeInfo
+	decoder.Decode(&files)
+
+	assert.Len(t, files, 1)
+
+	file := files[0]
+	assert.Equal(t, "child2", file.Name)
 }
 
 func TestRmFile_returnsErrorIfFileNotExist(t *testing.T) {

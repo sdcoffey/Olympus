@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -99,7 +98,7 @@ func (restApi OlympusApi) listNodes(parentNode *graph.Node, watermark, limit int
 	}
 
 	if limit > 0 {
-		end = minI(watermark+limit, len(children))
+		end = minI(start+limit, len(children)) - 1
 	} else {
 		end = len(children)
 	}
