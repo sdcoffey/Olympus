@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "outDir": "dist/app",
+    "target": "es5",
+    "module": "system",
+    "sourceMap": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "moduleResolution": "node",
+    "removeComments": false,
+    "noImplicitAny": true,
+    "suppressImplicitAnyIndexErrors": true
+  },
+  "filesGlob": [
+    "app/**/*.ts"
+  ]
+}
