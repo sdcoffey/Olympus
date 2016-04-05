@@ -20,7 +20,7 @@ gulp.task('compile', function() {
 });
 
 gulp.task('compile-scss', function() {
-  return gulp.src('/app/**/*.scss')
+  return gulp.src('app/**/*.scss')
     .pipe(scss({"bundleExec":true}))
     .pipe(gulp.dest('dist/app'));
 });
@@ -41,7 +41,7 @@ gulp.task('copy:libs', function() {
 });
 
 gulp.task('copy:assets', function() {
-  return gulp.src(['app/**/*', 'index.html', '!app/**/*.ts'], {base: './'})
+  return gulp.src(['app/**/*', 'index.html', '!app/**/*.scss', '!app/**/*.ts'], {base: './'})
     .pipe(gulp.dest('dist'));
 });
 

@@ -5,10 +5,9 @@ import {HTTP_PROVIDERS} from 'angular2/http';
 
 @Component({
   selector: 'app',
-  templateUrl: 'app/components/main/main.html',
+  templateUrl: 'app/components/main/app.html',
+  styleUrls: ['app/components/app/app.css'],
   directives: [FileListComponent],
   providers: [ApiClient, HTTP_PROVIDERS]
 })
-export class AppComponent {
-
-}
+export class AppComponent {}
