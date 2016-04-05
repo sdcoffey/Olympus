@@ -28,14 +28,21 @@ func main() {
 
 	println("Searching for Olympus instances")
 	var client apiclient.ApiClient
+	var resolvedPath string
+
 	if olympusAddress, err := peer.FindServer(time.Second * 5); err != nil {
 		color.Println("@rCould not find Olympus Instance on network: " + err.Error())
-		os.Exit(1)
+		print("Enter custom IP: ")
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+			resolvedPath = "http://" + scanner.Text()
+		}
 	} else {
-		resolvedPath := "http://" + olympusAddress.String() + ":3000"
+		resolvedPath = "http://" + olympusAddress.String() + ":3000"
 		color.Println("@gFound Olympus At:", olympusAddress.String())
-		client = apiclient.ApiClient{Address: resolvedPath}
 	}
+
+	client = apiclient.ApiClient{Address: resolvedPath}
 
 	var err error
 	manager = shared.NewManager(client, handle)
