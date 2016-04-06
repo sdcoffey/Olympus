@@ -13,5 +13,8 @@
   },
   "filesGlob": [
     "app/**/*.ts"
-  ]
+  ],
+  "atom": {
+    "rewriteTsconfig": false
+  }
 }

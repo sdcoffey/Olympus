@@ -19,6 +19,7 @@ _cgo_gotypes.go
 _cgo_export.*
 node_modules
 dist/
+*-cache/
 
 _testmain.go
 
