@@ -1,6 +1,13 @@
 {
   "name": "Olympus",
-  "version": "1.0a",
+  "version": "1.0.0",
+  "description": "Web client for your favorite personal cloud storage platform",
+  "author": "Steve Coffey <sdcoffey@umich.edu>",
+  "license": "GPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sdcoffey/olympus"
+  },
   "dependencies": {
     "angular2": "2.0.0-beta.13",
     "systemjs": "0.19.24",
