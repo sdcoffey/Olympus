@@ -1,6 +1,7 @@
 import {Component, OnInit, Input} from 'angular2/core';
 import {FileInfo} from '../../models/fileinfo';
 import {ApiClient} from '../../services/apiclient';
+import {Router, RouteParams} from 'angular2/router';
 
 @Component({
   selector: 'file-row',
@@ -22,11 +23,19 @@ class FileRow implements OnInit {
   templateUrl: 'app/components/filelist/filelist.html',
   directives: [FileRow]
 })
-export class FileListComponent {
+export class FileListComponent implements OnInit {
   @Input() parentId: string
   children: FileInfo[]
 
-  constructor(private _api: ApiClient) {}
+  constructor(
+    private _api: ApiClient,
+    private _routeParams: RouteParams,
+    private _router: Router
+  ) {}
+
+  ngOnInit() {
+    this.updateChildren(this._routeParams.get('parentId'));
+  }
 
   updateChildren(id: string) {
     this.parentId = id;
@@ -36,13 +45,9 @@ export class FileListComponent {
       });
   }
 
-  ngOnInit() {
-    this.updateChildren('rootNode');
-  }
-
   onChildSelected(fi: FileInfo) {
     if (fi.Mode > 0) {
-      this.updateChildren(fi.Id);
+      this._router.navigate(['/Browse', {parentId: fi.Id}]);
     }
   }
 }
