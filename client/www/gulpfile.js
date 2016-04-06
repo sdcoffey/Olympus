@@ -1,13 +1,25 @@
+const tscConfig = require('./tsconfig.json');
 const gulp = require('gulp');
 const del = require('del');
 const typescript = require('gulp-typescript');
 const sourcemaps = require('gulp-sourcemaps');
 const watch = require('gulp-watch');
-const scss = require('gulp-scss');
-const tscConfig = require('./tsconfig.json');
+const sass = require('gulp-sass');
+const debug = require('gulp-debug');
+const merge = require('merge-stream');
+const livereload = require('gulp-livereload');
+const browsersync = require('browser-sync').create();
 
 gulp.task('clean', function() {
   return del.sync('dist/**/*');
+});
+
+gulp.task('browsersync', ['build'], function() {
+    browsersync.init({
+      server: {
+          baseDir: 'dist'
+      }
+    });
 });
 
 gulp.task('compile', function() {
@@ -19,10 +31,16 @@ gulp.task('compile', function() {
     .pipe(gulp.dest('dist/app'));
 });
 
-gulp.task('compile-scss', function() {
-  return gulp.src('app/**/*.scss')
-    .pipe(scss())
-    .pipe(gulp.dest('dist/app'));
+gulp.task('sass', function() {
+  var main = gulp.src('main.sass')
+    .pipe(sass())
+    .pipe(gulp.dest('dist'));
+
+  var component = gulp.src('app/**/*.sass')
+    .pipe(sass())
+    .pipe(gulp.dest('dist/app'))
+
+  return merge(main, component);
 });
 
 gulp.task('copy:libs', function() {
@@ -46,8 +64,9 @@ gulp.task('copy:assets', function() {
 });
 
 gulp.task('watch', ['build'],  function() {
+  livereload.listen();
   gulp.watch('app/**/*', ['build']);
 });
 
-gulp.task('build', ['clean', 'compile', 'compile-scss', 'copy:libs', 'copy:assets']);
+gulp.task('build', ['clean', 'compile', 'sass', 'copy:libs', 'copy:assets']);
 gulp.task('default', ['build']);

@@ -4,7 +4,7 @@ export class FileInfo {
   Size: number;
   Mode: number;
 
-  isDir(): boolean {
+  public isDir(): boolean {
     return this.Mode > 0;
   }
 }

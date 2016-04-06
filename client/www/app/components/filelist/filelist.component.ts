@@ -7,8 +7,14 @@ import {ApiClient} from '../../services/apiclient';
   templateUrl: 'app/components/filelist/filerow.html',
   styleUrls: ['app/components/filelist/filerow.css']
 })
-class FileRow {
+class FileRow implements OnInit {
   @Input() obj: FileInfo
+
+  ngOnInit() {
+    if (this.obj.Mode > 0) {
+      this.obj.Name = this.obj.Name + "/";
+    }
+  }
 }
 
 @Component({
@@ -20,11 +26,10 @@ export class FileListComponent {
   @Input() parentId: string
   children: FileInfo[]
 
-  constructor(private _api: ApiClient) {
-    this.parentId = "rootNode";
-  }
+  constructor(private _api: ApiClient) {}
 
-  updateChildren() {
+  updateChildren(id: string) {
+    this.parentId = id;
     this._api.listFiles(this.parentId)
       .subscribe((children: FileInfo[]) => {
         this.children = children;
@@ -32,6 +37,12 @@ export class FileListComponent {
   }
 
   ngOnInit() {
-    this.updateChildren();
+    this.updateChildren('rootNode');
+  }
+
+  onChildSelected(fi: FileInfo) {
+    if (fi.Mode > 0) {
+      this.updateChildren(fi.Id);
+    }
   }
 }
