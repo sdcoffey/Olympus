@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -26,23 +27,25 @@ var (
 func main() {
 	handle := initDb()
 
-	println("Searching for Olympus instances")
-	var client apiclient.ApiClient
-	var resolvedPath string
+	var address string
+	flag.StringVar(&address, "address", "", "Olympus address (CLI will listen for local servers if none given")
+	flag.Parse()
 
-	if olympusAddress, err := peer.FindServer(time.Second * 5); err != nil {
-		color.Println("@rCould not find Olympus Instance on network: " + err.Error())
-		print("Enter custom IP: ")
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			resolvedPath = "http://" + scanner.Text()
+	if address == "" {
+		println("Searching for Olympus instances")
+
+		if olympusAddress, err := peer.FindServer(time.Second * 5); err != nil {
+			color.Println("@rCould not find Olympus Instance on network: " + err.Error())
+		} else {
+			address = olympusAddress.String()
+			color.Println("@gFound Olympus At:", olympusAddress.String())
 		}
-	} else {
-		resolvedPath = "http://" + olympusAddress.String() + ":3000"
-		color.Println("@gFound Olympus At:", olympusAddress.String())
 	}
 
-	client = apiclient.ApiClient{Address: resolvedPath}
+	if !strings.HasPrefix(address, "http") {
+		address = "http://" + address
+	}
+	client := apiclient.ApiClient{Address: address}
 
 	var err error
 	manager = shared.NewManager(client, handle)
