@@ -1,5 +1,5 @@
 import {Component} from 'angular2/core';
-import {FileListComponent} from '../filelist/filelist.component';
+import {NodeListComponent} from '../nodelist/nodelist.component';
 import {ApiClient} from '../../services/apiclient';
 import {HTTP_PROVIDERS} from 'angular2/http';
 import {RouteConfig, Router, ROUTER_DIRECTIVES, ROUTER_PROVIDERS} from 'angular2/router';
@@ -8,14 +8,14 @@ import {RouteConfig, Router, ROUTER_DIRECTIVES, ROUTER_PROVIDERS} from 'angular2
   selector: 'app',
   templateUrl: 'app/components/app/app.html',
   styleUrls: ['app/components/app/app.css'],
-  directives: [FileListComponent, ROUTER_DIRECTIVES],
+  directives: [NodeListComponent, ROUTER_DIRECTIVES],
   providers: [ApiClient, HTTP_PROVIDERS, ROUTER_PROVIDERS]
 })
 @RouteConfig([
   {
     path: '/browse/:parentId',
     name: 'Browse',
-    component: FileListComponent
+    component: NodeListComponent
   },
   {
     path: '/',

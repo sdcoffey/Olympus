@@ -1,0 +1,5 @@
+<table class="nodeTable">
+  <tr (click)="onChildSelected(item)" class="nodeRow" *ngFor="#item of children" id="{{item.Id}}">
+    <td>{{item.Name}}</td>
+    <td>{{item.Size}}</td>
+</table>

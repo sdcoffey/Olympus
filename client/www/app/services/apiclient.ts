@@ -1,15 +1,15 @@
 import {Injectable} from 'angular2/core';
 import {Http, HTTP_PROVIDERS, Response} from 'angular2/http';
 import {Observable} from 'rxjs/Observable';
-import {FileInfo} from '../models/fileinfo';
+import {NodeInfo} from '../models/nodeinfo';
 import 'rxjs/Rx';
 
-@Injectable() 
+@Injectable()
 export class ApiClient {
 
   constructor(private http: Http) {}
 
-  listFiles(id: string): Observable<FileInfo[]> {
+  listFiles(id: string): Observable<NodeInfo[]> {
     return this.http.get(`/v1/ls/${id}`)
       .map((res:Response) => res.json());
   }
