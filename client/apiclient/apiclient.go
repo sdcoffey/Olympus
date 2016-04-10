@@ -3,8 +3,10 @@ package apiclient
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -35,7 +37,7 @@ func (client ApiClient) ListNodes(parentId string) ([]graph.NodeInfo, error) {
 		return make([]graph.NodeInfo, 0), err
 	} else {
 		request.Header.Add("Accept", "application/gob")
-		if resp, err := http.DefaultClient.Do(request); err != nil {
+		if resp, err := client.do(request); err != nil {
 			return make([]graph.NodeInfo, 0), err
 		} else {
 			defer resp.Body.Close()
@@ -56,8 +58,12 @@ func (client ApiClient) MoveNode(nodeId, newParentId, newName string) error {
 		if newName != "" {
 			request.URL.Query().Add("rename", newName)
 		}
-		_, err := http.DefaultClient.Do(request)
-		return err
+
+		if _, err := client.do(request); err != nil {
+			return err
+		} else {
+			return nil
+		}
 	}
 }
 
@@ -65,9 +71,10 @@ func (client ApiClient) RemoveNode(nodeId string) error {
 	url := client.url(fmt.Sprintf("rm/%s", nodeId))
 	if request, err := http.NewRequest("DELETE", url, nil); err != nil {
 		return err
-	} else {
-		_, err := http.DefaultClient.Do(request)
+	} else if _, err := client.do(request); err != nil {
 		return err
+	} else {
+		return nil
 	}
 }
 
@@ -82,7 +89,7 @@ func (client ApiClient) CreateNode(info graph.NodeInfo) (graph.NodeInfo, error) 
 	} else {
 		request.Header.Add("Accept", "application/gob")
 		request.Header.Add("Content-Type", "application/gob")
-		if resp, err := http.DefaultClient.Do(request); err != nil {
+		if resp, err := client.do(request); err != nil {
 			return graph.NodeInfo{}, err
 		} else {
 			defer resp.Body.Close()
@@ -107,8 +114,11 @@ func (client ApiClient) UpdateNode(nodeInfo graph.NodeInfo) error {
 		return err
 	} else {
 		request.Header.Add("Content-Type", "application/gob")
-		_, err := http.DefaultClient.Do(request)
-		return err
+		if _, err := client.do(request); err != nil {
+			return err
+		}
+
+		return nil
 	}
 }
 
@@ -122,7 +132,7 @@ func (client ApiClient) HasBlocks(nodeId string, blocks []string) ([]string, err
 		request.Header.Add("Accept", "application/gob")
 		request.URL.Query().Add("blocks", hashList)
 
-		if resp, err := http.DefaultClient.Do(request); err != nil {
+		if resp, err := client.do(request); err != nil {
 			return []string{}, err
 		} else {
 			defer resp.Body.Close()
@@ -142,8 +152,28 @@ func (client ApiClient) SendBlock(nodeId string, offset int64, data io.Reader) e
 
 	if request, err := http.NewRequest("POST", url, data); err != nil {
 		return err
-	} else {
-		_, err := http.DefaultClient.Do(request)
+	} else if _, err := client.do(request); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (client ApiClient) do(req *http.Request) (*http.Response, error) {
+	if resp, err := http.DefaultClient.Do(req); err != nil {
+		return resp, err
+	} else if client.errorFromResponse(resp); err != nil {
+		return nil, err
+	} else {
+		return resp, nil
+	}
+}
+
+func (client ApiClient) errorFromResponse(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		errorMessage, _ := ioutil.ReadAll(resp.Body)
+		return errors.New(string(errorMessage))
+	}
+	return nil
 }
