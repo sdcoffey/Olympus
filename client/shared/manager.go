@@ -3,8 +3,10 @@ package shared
 import (
 	"bytes"
 	"errors"
+	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/cayley"
@@ -69,12 +71,18 @@ func (manager *Manager) UploadFile(parentId, localPath string) (*graph.Node, err
 	} else if fi.IsDir() {
 		return nil, errors.New("Cannot upload a directory")
 	} else {
+		mimeType := mime.TypeByExtension(filepath.Ext(fi.Name()))
+		if strings.Contains(mimeType, ";") {
+			mimeType = strings.Split(mimeType, ";")[0]
+		}
+
 		nodeInfo := graph.NodeInfo{
 			Name:     filepath.Base(fi.Name()),
 			Size:     fi.Size(),
 			Mode:     0700,
 			MTime:    time.Now(),
 			ParentId: parentId,
+			Type:     mimeType,
 		}
 		if newNode, err := manager.api.CreateNode(nodeInfo); err != nil {
 			return nil, err

@@ -44,6 +44,7 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 	v1Router.HandleFunc("/update/{nodeId}", restApi.UpdateNode).Methods("PATCH")
 	v1Router.HandleFunc("/dd/{nodeId}/{offset}", restApi.WriteBlock).Methods("POST")
 	v1Router.HandleFunc("/cat/{nodeId}/{offset}", restApi.ReadBlock).Methods("GET")
+	v1Router.HandleFunc("/dl/{nodeId}", restApi.DownloadFile).Methods("GET")
 
 	fileServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
 	v1Router.Handle("/block/{blockId}", http.StripPrefix("/v1/block/", fileServer))
@@ -64,6 +65,21 @@ func decoderFromHeader(body io.Reader, header http.Header) Decoder {
 		return gob.NewDecoder(body)
 	} else {
 		return json.NewDecoder(body)
+	}
+}
+
+// GET v1/dl/{nodeId}
+func (restApi OlympusApi) DownloadFile(writer http.ResponseWriter, req *http.Request) {
+	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
+	if !node.Exists() {
+		writeNodeNotFoundError(node, writer)
+		return
+	}
+
+	writer.Header().Add("Content-Type", node.Type())
+	for _, b := range node.Blocks() {
+		reader, _ := graph.Reader(b.Hash)
+		io.Copy(writer, reader)
 	}
 }
 
