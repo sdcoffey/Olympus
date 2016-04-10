@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/gorilla/mux"
@@ -151,6 +152,7 @@ func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Reque
 		http.Error(writer, fmt.Sprintf("Node exists, call /v1/touch/%s/to update this object", node.Id), 400)
 	} else {
 		nodeInfo.ParentId = parent.Id
+		nodeInfo.MTime = time.Now()
 		newNode := restApi.graph.NodeWithNodeInfo(nodeInfo)
 		newNode.Id = uuid.New()
 		if err := newNode.Save(); err != nil {
