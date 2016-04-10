@@ -18,6 +18,7 @@ const (
 	modeLink   = "modeLink"
 	mTimeLink  = "hasMTime"
 	sizeLink   = "hasSize"
+	typeLink   = "hasType"
 
 	timeFormat = time.RFC3339Nano
 )
@@ -35,6 +36,7 @@ type Node struct {
 	size     int64
 	mTime    time.Time
 	mode     os.FileMode
+	mimeType string
 }
 
 func newNode(name string, graph *NodeGraph) *Node {
@@ -47,11 +49,7 @@ func newNode(name string, graph *NodeGraph) *Node {
 }
 
 func (nd *Node) Name() string {
-	if name := nd.graphValue(nameLink); name != "" {
-		return name
-	} else {
-		return ""
-	}
+	return nd.graphValue(nameLink)
 }
 
 func (nd *Node) Size() int64 {
@@ -83,6 +81,10 @@ func (nd *Node) MTime() time.Time {
 	} else {
 		return t
 	}
+}
+
+func (nd *Node) Type() string {
+	return nd.graphValue(typeLink)
 }
 
 func (nd *Node) IsDir() bool {
@@ -207,6 +209,14 @@ func (nd *Node) Save() (err error) {
 		nd.name = ""
 	}
 
+	if mimeType := nd.Type(); nd.mimeType != mimeType && mimeType != "" && nd.mimeType != "" {
+		staleQuads.RemoveQuad(cayley.Quad(nd.Id, typeLink, mimeType, ""))
+	}
+	if nd.mimeType != "" && nd.mimeType != nd.Type() {
+		newQuads.AddQuad(cayley.Quad(nd.Id, typeLink, nd.mimeType, ""))
+		nd.mimeType = ""
+	}
+
 	if size := nd.Size(); nd.size != size && size != 0 && nd.size != 0 {
 		staleQuads.RemoveQuad(cayley.Quad(nd.Id, sizeLink, fmt.Sprint(nd.Size()), ""))
 	}
@@ -276,6 +286,7 @@ func (nd *Node) NodeInfo() NodeInfo {
 		MTime: nd.MTime(),
 		Name:  nd.Name(),
 		Size:  nd.Size(),
+		Type:  nd.Type(),
 	}
 	if nd.Parent() != nil {
 		info.ParentId = nd.Parent().Id

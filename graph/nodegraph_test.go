@@ -20,6 +20,7 @@ func TestNodeWithNodeInfo(t *testing.T) {
 		Size:     1,
 		MTime:    now,
 		Mode:     4,
+		Type:     "application/json",
 	}
 
 	node := ng.NodeWithNodeInfo(info)
@@ -29,6 +30,7 @@ func TestNodeWithNodeInfo(t *testing.T) {
 	assert.EqualValues(t, 1, node.size)
 	assert.Equal(t, now, node.mTime)
 	assert.EqualValues(t, 4, node.mode)
+	assert.Equal(t, "application/json", node.mimeType)
 }
 
 func TestNodeWithName(t *testing.T) {

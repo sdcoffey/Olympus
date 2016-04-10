@@ -9,6 +9,7 @@ type NodeInfo struct {
 	Size     int64
 	MTime    time.Time
 	Mode     uint32
+	Type     string
 }
 
 type BlockInfo struct {

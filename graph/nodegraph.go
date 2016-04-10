@@ -57,6 +57,7 @@ func (ng *NodeGraph) NodeWithNodeInfo(info NodeInfo) *Node {
 	node.size = info.Size
 	node.mTime = info.MTime
 	node.parentId = info.ParentId
+	node.mimeType = info.Type
 
 	return node
 }

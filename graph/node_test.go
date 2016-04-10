@@ -28,11 +28,14 @@ func TestNodeInfo(t *testing.T) {
 
 	child, err := makeNode("child", ng.RootNode.Id, 1024, now, ng)
 	assert.NoError(t, err)
+	child.mimeType = "application/octet-stream"
+	child.Save()
 
 	info := child.NodeInfo()
 	assert.Equal(t, child.Id, info.Id)
 	assert.Equal(t, ng.RootNode.Id, info.ParentId)
 	assert.Equal(t, "child", info.Name)
+	assert.Equal(t, "application/octet-stream", info.Type)
 	assert.EqualValues(t, 1024, info.Size)
 	assert.Equal(t, now.Unix(), info.MTime.Unix())
 	assert.EqualValues(t, child.Mode(), info.Mode)
@@ -64,6 +67,18 @@ func TestExists_returnsTrueIfName(t *testing.T) {
 	assert.NoError(t, node.Save())
 
 	assert.True(t, node.Exists())
+}
+
+func TestType(t *testing.T) {
+	ng := testInit()
+
+	node := newNode("style.css", ng)
+	node.parentId = ng.RootNode.Id
+	node.mimeType = "text/css"
+	node.size = 100
+	assert.NoError(t, node.Save())
+
+	assert.EqualValues(t, "text/css", node.Type())
 }
 
 func TestSize(t *testing.T) {
@@ -181,6 +196,7 @@ func TestSave(t *testing.T) {
 	node.size = 1024
 	node.mode = os.FileMode(0755)
 	node.mTime = mTime
+	node.mimeType = "application/json"
 
 	assert.NoError(t, node.Save())
 
@@ -200,6 +216,9 @@ func TestSave(t *testing.T) {
 
 	it = cayley.StartPath(ng, node.Id).Out(modeLink).BuildIterator()
 	assertProperty(fmt.Sprint(0755), it)
+
+	it = cayley.StartPath(ng, node.Id).Out(typeLink).BuildIterator()
+	assertProperty("application/json", it)
 }
 
 func TestSave_overwriteExistingProperty(t *testing.T) {
@@ -209,17 +228,20 @@ func TestSave_overwriteExistingProperty(t *testing.T) {
 	node.parentId = ng.RootNode.Id
 	node.mode = 6
 	node.size = 1024
+	node.mimeType = "video/mp4"
 
 	assert.NoError(t, node.Save())
 
 	node.name = "root2"
 	node.size = 1025
 	node.mode = 7
+	node.mimeType = "audio/mp3"
 
 	assert.NoError(t, node.Save())
 	assert.Equal(t, "root2", node.Name())
 	assert.EqualValues(t, 1025, node.Size())
 	assert.EqualValues(t, 7, node.Mode())
+	assert.Equal(t, "audio/mp3", node.Type())
 }
 
 func TestSave_returnsErrorWhenFileHasNoName(t *testing.T) {
