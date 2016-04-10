@@ -1,5 +1,14 @@
 <table class="nodeTable">
-  <tr (click)="onChildSelected(item)" class="nodeRow" *ngFor="#item of children" id="{{item.Id}}">
+  <tr *ngFor="#item of children; #i = index"
+    (dblclick)="navigateTo(item)"
+    (click)="onChildSelected(i, item)"
+    [ngClass]="{selected: i == selectedIndex }"
+    class="nodeRow"
+    id="{{item.Id}}">
+      <td class="thumbnail">
+      <i class="material-icons">{{item.iconString()}}</i>
+    </td>
     <td>{{item.Name}}</td>
-    <td>{{item.Size}}</td>
+    <td (click)="delete($event, item)"><i class="material-icons">delete</i></td>
+  </tr>
 </table>

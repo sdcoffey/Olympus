@@ -14,6 +14,11 @@ export class ApiClient {
       .map((res:Response) => res.json());
   }
 
+  deleteNode(id: string): Observable<boolean> {
+    return this.http.delete(`/v1/rm/${id}`)
+      .map((res:Response) => res.status == 200);
+  }
+
   handleError(error: Response) {
     console.error(error);
   }

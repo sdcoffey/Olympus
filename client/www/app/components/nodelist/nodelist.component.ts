@@ -11,12 +11,15 @@ import {Router, RouteParams} from 'angular2/router';
 export class NodeListComponent implements OnInit {
   @Input() parentId: string
   children: NodeInfo[]
+  selectedIndex: number
 
   constructor(
     private _api: ApiClient,
     private _routeParams: RouteParams,
     private _router: Router
-  ) {}
+  ) {
+    this.selectedIndex = -1
+  }
 
   ngOnInit() {
     this.updateChildren(this._routeParams.get('parentId'));
@@ -25,14 +28,40 @@ export class NodeListComponent implements OnInit {
   updateChildren(id: string) {
     this.parentId = id;
     this._api.listFiles(this.parentId)
-      .subscribe((children: NodeInfo[]) => {
-        this.children = children;
+      .subscribe((children: any[]) => {
+        this.children = new Array<NodeInfo>();
+        for (var i = 0; i < children.length; i++) {
+          this.children.push(new NodeInfo(
+            children[i].Id,
+            children[i].Name,
+            children[i].Size,
+            children[i].Mode
+          ));
+        }
       });
   }
 
-  onChildSelected(fi: NodeInfo) {
-    if (fi.isDir()) {
-      this._router.navigate(['/Browse', {parentId: fi.Id}]);
+  onChildSelected(index: number, fi: NodeInfo) {
+    if (index == this.selectedIndex) {
+      this.selectedIndex = -1;
+    } else {
+      this.selectedIndex = index;
     }
+  }
+
+  navigateTo(node: NodeInfo) {
+    if (node.isDir()) {
+      this._router.navigate(['/Browse', {parentId: node.Id}]);
+    }
+  }
+
+  delete(event: MouseEvent, node: NodeInfo) {
+    event.preventDefault();
+    this._api.deleteNode(node.Id)
+      .subscribe((success: boolean) => {
+        if (success) {
+          this.updateChildren(this.parentId);
+        }
+      });
   }
 }
