@@ -38,7 +38,6 @@ Data and config files are, by default, stored in a the current users's home dire
 ## Coming Soon
  - Mobile and Web clients
  - Desktop agent
- - File streaming API
  - HTTP/2 Support
  - Expanded runtime configuration options
  - Remote instance support
