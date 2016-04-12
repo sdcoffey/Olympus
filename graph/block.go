@@ -52,7 +52,7 @@ func Write(hash string, d []byte) (int, error) {
 		return 0, errors.New("Data has does not match this blocks hash")
 	}
 
-	if file, err := os.OpenFile(LocationOnDisk(hash), os.O_CREATE|os.O_TRUNC|os.O_RDWR, os.FileMode(0644)); err != nil {
+	if file, err := os.OpenFile(LocationOnDisk(hash), os.O_CREATE|os.O_EXCL|os.O_RDWR, os.FileMode(0644)); err != nil {
 		return 0, err
 	} else {
 		syscall.Flock(int(file.Fd()), syscall.LOCK_EX)

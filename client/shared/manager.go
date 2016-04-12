@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/cayley"
@@ -65,7 +66,9 @@ func (manager *Manager) MoveNode(nodeId, newParentId, newName string) error {
 	return nil
 }
 
-func (manager *Manager) UploadFile(parentId, localPath string) (*graph.Node, error) {
+type ProgressCallback func(total, current int64)
+
+func (manager *Manager) UploadFile(parentId, localPath string, callback ProgressCallback) (*graph.Node, error) {
 	if fi, err := os.Stat(localPath); err != nil {
 		return nil, err
 	} else if fi.IsDir() {
@@ -90,20 +93,71 @@ func (manager *Manager) UploadFile(parentId, localPath string) (*graph.Node, err
 			return nil, err
 		} else {
 			defer localFile.Close()
-			var i int64
-			for i = 0; i < fi.Size(); i += graph.BLOCK_SIZE {
-				buf := make([]byte, min(fi.Size()-i, graph.BLOCK_SIZE))
-				if _, err = localFile.ReadAt(buf, i); err != nil {
+
+			errChan := make(chan error)
+			uploadChan := make(chan heap, 5)
+			defer close(uploadChan)
+
+			var wg sync.WaitGroup
+			numBlocks := int(fi.Size() / graph.BLOCK_SIZE)
+			if fi.Size()%graph.BLOCK_SIZE > 0 {
+				numBlocks++
+			}
+
+			wg.Add(numBlocks)
+			var uploadedBytes int64
+			for i := 0; i < 5; i++ {
+				go func() {
+					for h := range uploadChan {
+						payloadSize := int64(len(h.data))
+
+						rd := bytes.NewBuffer(h.data)
+						hash := graph.Hash(h.data)
+						if err = manager.api.SendBlock(newNode.Id, h.offset, hash, rd); err != nil {
+							errChan <- err
+						}
+						uploadedBytes += payloadSize
+						callback(fi.Size(), uploadedBytes)
+						wg.Done()
+					}
+				}()
+			}
+
+			errChecker := func() error {
+				select {
+				case err := <-errChan:
+					return err
+				default:
+					return nil
+				}
+			}
+
+			var offset int64
+			for offset = 0; offset < fi.Size(); offset += graph.BLOCK_SIZE {
+				buf := make([]byte, min(fi.Size()-offset, graph.BLOCK_SIZE))
+				if _, err = localFile.ReadAt(buf, offset); err != nil {
 					return nil, err
 				}
-				rd := bytes.NewBuffer(buf)
-				if err := manager.api.SendBlock(newNode.Id, i, rd); err != nil {
+				uploadChan <- heap{offset, buf}
+
+				if err := errChecker(); err != nil {
 					return nil, err
 				}
 			}
+
+			if err := errChecker(); err != nil {
+				return nil, err
+			}
+			wg.Wait()
+
 			return manager.graph.NodeWithNodeInfo(newNode), err
 		}
 	}
+}
+
+type heap struct {
+	offset int64
+	data   []byte
 }
 
 func min(a, b int64) int64 {

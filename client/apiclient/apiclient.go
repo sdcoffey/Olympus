@@ -20,7 +20,7 @@ type OlympusClient interface {
 	CreateNode(info graph.NodeInfo) (graph.NodeInfo, error)
 	UpdateNode(info graph.NodeInfo) error
 	HasBlocks(nodeId string, blocks []string) ([]string, error)
-	SendBlock(nodeId string, offset int64, data io.Reader) error
+	SendBlock(nodeId string, offset int64, hash string, data io.Reader) error
 }
 
 type ApiClient struct {
@@ -147,13 +147,15 @@ func (client ApiClient) HasBlocks(nodeId string, blocks []string) ([]string, err
 	}
 }
 
-func (client ApiClient) SendBlock(nodeId string, offset int64, data io.Reader) error {
+func (client ApiClient) SendBlock(nodeId string, offset int64, hash string, data io.Reader) error {
 	url := client.url(fmt.Sprintf("dd/%s/%d", nodeId, offset))
-
 	if request, err := http.NewRequest("POST", url, data); err != nil {
 		return err
-	} else if _, err := client.do(request); err != nil {
-		return err
+	} else {
+		request.Header.Add("Content-Hash", hash)
+		if _, err := client.do(request); err != nil {
+			return err
+		}
 	}
 
 	return nil

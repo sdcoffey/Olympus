@@ -77,7 +77,6 @@ func (restApi OlympusApi) DownloadFile(writer http.ResponseWriter, req *http.Req
 	}
 
 	http.ServeContent(writer, req, node.Name(), node.MTime(), node.ReadSeeker())
-
 }
 
 // GET v1/ls/{parentId}
@@ -258,6 +257,8 @@ func (restApi OlympusApi) WriteBlock(writer http.ResponseWriter, req *http.Reque
 		http.Error(writer, err.Error(), 400)
 		return
 	}
+
+	// TODO: send offset as first n bytes of payload, if that block already exists, terminate the connection
 
 	offsetString := paramFromRequest("offset", req)
 	if offset, err := strconv.ParseInt(offsetString, 10, 64); err != nil {
