@@ -76,11 +76,8 @@ func (restApi OlympusApi) DownloadFile(writer http.ResponseWriter, req *http.Req
 		return
 	}
 
-	writer.Header().Add("Content-Type", node.Type())
-	for _, b := range node.Blocks() {
-		reader, _ := graph.Reader(b.Hash)
-		io.Copy(writer, reader)
-	}
+	http.ServeContent(writer, req, node.Name(), node.MTime(), node.ReadSeeker())
+
 }
 
 // GET v1/ls/{parentId}

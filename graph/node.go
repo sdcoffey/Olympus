@@ -3,6 +3,7 @@ package graph
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"time"
@@ -293,6 +294,62 @@ func (nd *Node) NodeInfo() NodeInfo {
 	}
 
 	return info
+}
+
+func (nd *Node) ReadSeeker() *NodeSeeker {
+	rs := new(NodeSeeker)
+	rs.node = nd
+	return rs
+}
+
+type NodeSeeker struct {
+	node   *Node
+	offset int64
+}
+
+func (ns *NodeSeeker) Seek(offset int64, whence int) (int64, error) {
+	if whence == 0 {
+		ns.offset = offset
+	} else if whence == 1 {
+		ns.offset += offset
+	} else if whence == 2 {
+		ns.offset = ns.node.Size() - offset
+	}
+
+	if offset < 0 {
+		return offset, errors.New("Offset set before beginning of file")
+	} else {
+		return ns.offset, nil
+	}
+}
+
+func (ns *NodeSeeker) Read(p []byte) (n int, err error) {
+	if ns.offset > ns.node.Size() {
+		return 0, io.EOF
+	}
+
+	blockOffset := (ns.offset / BLOCK_SIZE) * BLOCK_SIZE
+	block := ns.node.BlockWithOffset(blockOffset)
+
+	if dat, err := RawData(block); err != nil {
+		return 0, err
+	} else {
+		relOffset := int(ns.offset % BLOCK_SIZE)
+		end := 0
+		if len(p) > len(dat)-relOffset {
+			end = len(dat) - relOffset
+		} else {
+			end = len(p)
+		}
+
+		var i int
+		for i = 0; i < end; i++ {
+			p[i] = dat[i+relOffset]
+		}
+		ns.offset += int64(i)
+
+		return i, nil
+	}
 }
 
 func (nd *Node) String() string {

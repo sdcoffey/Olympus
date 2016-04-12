@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -31,6 +32,16 @@ func Hash(d []byte) string {
 
 func Reader(hash string) (io.Reader, error) {
 	return backingFile(hash)
+}
+
+func RawData(hash string) ([]byte, error) {
+	if file, err := backingFile(hash); err != nil {
+		return []byte{}, err
+	} else if p, err := ioutil.ReadAll(file); err != nil {
+		return []byte{}, err
+	} else {
+		return p, nil
+	}
 }
 
 func Write(hash string, d []byte) (int, error) {

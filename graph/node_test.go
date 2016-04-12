@@ -406,6 +406,33 @@ func TestResize_resizesCorrectly(t *testing.T) {
 	assert.EqualValues(t, 1025, child.Size())
 }
 
+func TestNodeSeeker_readsCorrectData(t *testing.T) {
+	ng := testInit()
+
+	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
+	dat := RandDat(1024)
+
+	assert.NoError(t, child.WriteData(dat, 0))
+
+	nodeSeeker := child.ReadSeeker()
+	offset, err := nodeSeeker.Seek(0, 0)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 0, offset)
+
+	p := make([]byte, 1)
+	nodeSeeker.Read(p) // expect 1 byte to be read from front of file
+
+	assert.EqualValues(t, dat[0], p[0])
+
+	offset, err = nodeSeeker.Seek(512, 0)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 512, offset)
+
+	p = make([]byte, 25)
+	nodeSeeker.Read(p)
+	assert.Equal(t, dat[offset:int(offset)+len(p)], p)
+}
+
 func BenchmarkWrite(b *testing.B) {
 	ng := testInit()
 	var err error
