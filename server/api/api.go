@@ -258,7 +258,13 @@ func (restApi OlympusApi) WriteBlock(writer http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// TODO: send offset as first n bytes of payload, if that block already exists, terminate the connection
+	headerHash := req.Header.Get("Content-Hash")
+	dataHash := graph.Hash(data)
+
+	if dataHash != headerHash {
+		http.Error(writer, "Hash in header does not match data's hash", 400)
+		return
+	}
 
 	offsetString := paramFromRequest("offset", req)
 	if offset, err := strconv.ParseInt(offsetString, 10, 64); err != nil {
