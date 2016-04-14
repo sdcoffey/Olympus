@@ -54,6 +54,11 @@
 		{
 			"ImportPath": "github.com/wsxiaoys/terminal/color",
 			"Rev": "9dcaf1d63119a8ac00eef82270eaef08b6aa2328"
+		},
+		{
+			"ImportPath": "gopkg.in/cheggaaa/pb.v1",
+			"Comment": "v1.0.2",
+			"Rev": "226d21d43a305fac52b3a104ef83e721b15275e0"
 		}
 	]
 }
