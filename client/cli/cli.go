@@ -15,7 +15,6 @@ import (
 	"github.com/sdcoffey/olympus/client/shared"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
-	"github.com/wsxiaoys/terminal/color"
 	"gopkg.in/cheggaaa/pb.v1"
 )
 
