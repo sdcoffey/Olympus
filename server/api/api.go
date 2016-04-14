@@ -76,6 +76,8 @@ func (restApi OlympusApi) DownloadFile(writer http.ResponseWriter, req *http.Req
 		return
 	}
 
+	println(node.Type())
+	writer.Header().Add("Content-Type", node.Type())
 	http.ServeContent(writer, req, node.Name(), node.MTime(), node.ReadSeeker())
 }
 
