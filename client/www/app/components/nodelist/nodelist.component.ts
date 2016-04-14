@@ -52,6 +52,8 @@ export class NodeListComponent implements OnInit {
   navigateTo(node: NodeInfo) {
     if (node.isDir()) {
       this._router.navigate(['/Browse', {parentId: node.Id}]);
+    } else {
+      window.open('/v1/dl/' + node.Id, '_blank')
     }
   }
 
