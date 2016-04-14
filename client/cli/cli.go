@@ -14,6 +14,7 @@ import (
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
 	"github.com/wsxiaoys/terminal/color"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 var (
@@ -194,9 +195,19 @@ func put(c *cli.Context) {
 		return
 	}
 	target := c.Args()[0]
-	if _, err := manager.UploadFile(model.Root.Id, target); err != nil {
+
+	file, _ := os.Stat(target)
+	bar := pb.StartNew(int(file.Size()))
+	bar.SetUnits(pb.U_BYTES)
+
+	updateCallback := func(total, progress int64) {
+		bar.Set(int(progress))
+	}
+
+	if _, err := manager.UploadFile(model.Root.Id, target, updateCallback); err != nil {
 		color.Println(fmt.Sprintf("@rError uploading %s: %s", target, err.Error()))
 	} else {
+		bar.FinishPrint("Finished Uploading")
 		model.Refresh()
 	}
 }
