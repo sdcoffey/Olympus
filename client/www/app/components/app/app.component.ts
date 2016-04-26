@@ -2,7 +2,7 @@ import {Component} from 'angular2/core';
 import {NodeListComponent} from '../nodelist/nodelist.component';
 import {ApiClient} from '../../services/apiclient';
 import {HTTP_PROVIDERS} from 'angular2/http';
-import {RouteConfig, Router, ROUTER_DIRECTIVES, ROUTER_PROVIDERS} from 'angular2/router';
+import {RouteConfig, ROUTER_DIRECTIVES, ROUTER_PROVIDERS} from 'angular2/router';
 
 @Component({
   selector: 'app',
