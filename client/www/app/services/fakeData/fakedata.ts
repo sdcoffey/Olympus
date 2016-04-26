@@ -1,25 +1,25 @@
-export var FAKE_DATA:any = {
-  rootNode: [
+export var FAKE_DATA: {[key:string]:any} = {
+  "rootNode": [
     {
-      "Id": "abcdef",
+      "Id": "id1",
       "Name": "Child",
-      "MTime": "some-time-here",
+      "MTime": "2016-04-30T16:54:30.914587872Z",
       "Mode": "0755",
       "Type": ""
     },
     {
-      "Id": "ghijkl",
+      "Id": "id2",
       "Name": "Child2",
-      "MTime": "some-time-here",
+      "MTime": "2016-04-30T16:54:30.914587872Z",
       "Mode": "2147483648",
       "Type": ""
     }
   ],
-  ghijkl: [
+  "id3": [
     {
-      "Id": "mnopqr",
+      "Id": "62084969-59bc-49d2-a5be-433eda3a338h",
       "Name": "Child3",
-      "MTime": "some-time-here",
+      "MTime": "2016-04-30T16:54:30.914587872Z",
       "Mode": "0744",
       "Type": "audio/mp3"
     }

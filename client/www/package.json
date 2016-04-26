@@ -25,6 +25,7 @@
     "del": "^2.1.0",
     "gulp": "^3.9.1",
     "gulp-debug": "^2.1.2",
+    "gulp-live-server": "0.0.29",
     "gulp-livereload": "^3.8.1",
     "gulp-minify": "0.0.11",
     "gulp-preprocess": "^2.0.0",

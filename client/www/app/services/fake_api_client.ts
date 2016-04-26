@@ -1,20 +1,16 @@
-import {OlympusClient} from "./client";
 import {Observable} from "rxjs/Observable";
 import {NodeInfo} from "../models/nodeinfo";
 import {FAKE_DATA} from "./fakeData/fakedata";
 import {Injectable} from "angular2/core";
 import {Observer} from "rxjs/Observer";
+import {ApiClient} from "./apiclient";
 
 @Injectable()
-export class FakeApiClient implements OlympusClient {
-
+export class FakeApiClient extends ApiClient {
+  
   listNodes(id:string):Observable<NodeInfo[]> {
     return new Observable((observer: Observer<NodeInfo[]>) => {
-      if (id == "rootNode") {
-        observer.next(FAKE_DATA.rootNode);
-      } else {
-        observer.next(FAKE_DATA.ghijkl);
-      }
+      observer.next(<NodeInfo[]>FAKE_DATA[id]);
       observer.complete();
     })
   }

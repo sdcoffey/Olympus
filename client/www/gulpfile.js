@@ -13,6 +13,7 @@ const uglify = require('gulp-uglify');
 const argv = require('yargs').argv;
 const rename = require('gulp-rename');
 const preprocess = require('gulp-preprocess');
+const live_server = require('gulp-live-server');
 
 var libs_prod = [
   'node_modules/angular2/bundles/angular2-polyfills.min.js',
@@ -56,8 +57,8 @@ gulp.task('compile', function () {
   var compiler = gulp.src('app/**/*.ts')
     .pipe(sourcemaps.init())
     .pipe(preprocess({ context: { PROD: production } }))
-    .pipe(typescript(tscConfig.compilerOptions))
-
+    .pipe(typescript(tscConfig.compilerOptions));
+  
   if (production) {
     compiler.pipe(uglify());
   } else {
@@ -96,6 +97,14 @@ gulp.task('copy:assets', function () {
 gulp.task('watch', ['build'], function () {
   livereload.listen();
   gulp.watch('app/**/*', ['build']);
+});
+
+gulp.task('serve', ['build'], function() {
+  var server = live_server.static('dist', '3001');
+  server.start();
+  gulp.watch('app/**/*', ['build'], function (file) {
+    server.notify.apply(server, [file]);
+  })
 });
 
 gulp.task('build', ['clean', 'compile', 'sass', 'copy:libs', 'copy:assets']);

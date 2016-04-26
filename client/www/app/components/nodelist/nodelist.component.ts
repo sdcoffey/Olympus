@@ -1,21 +1,20 @@
 import {Component, OnInit, Input} from 'angular2/core';
 import {NodeInfo} from '../../models/nodeinfo';
-import {ApiClient} from '../../services/apiclient';
 import {Router, RouteParams} from 'angular2/router';
-import {OlympusClient} from "../../services/client";
+import {ApiClient} from "../../services/apiclient";
 
 @Component({
   selector: 'node-list',
   templateUrl: 'app/components/nodelist/nodelist.html',
-  styleUrls: ['app/components/nodelist/nodelist.css']
+  styleUrls: ['app/components/nodelist/nodelist.css'],
 })
 export class NodeListComponent implements OnInit {
-  @Input() parentId: string
-  children: NodeInfo[]
-  selectedIndex: number
+  @Input() parentId: string;
+  children: NodeInfo[];
+  selectedIndex: number;
 
   constructor(
-    private _api: OlympusClient,
+    private _api: ApiClient,
     private _routeParams: RouteParams,
     private _router: Router
   ) {

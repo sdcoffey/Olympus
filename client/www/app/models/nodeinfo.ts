@@ -6,11 +6,11 @@ export class NodeInfo {
   Size: number;
   Mode: number;
 
-  constructor(_id: string, _name: string, _size: number, _mode: number) {
-    this.Id = _id;
-    this.Name = _name;
-    this.Size = _size;
-    this.Mode = _mode;
+  constructor(_json: any) {
+    this.Id = _json.Id;
+    this.Name = _json.Name;
+    this.Size = _json.Size;
+    this.Mode = _json.Mode;
   }
 
   public isDir(): boolean {
