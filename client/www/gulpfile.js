@@ -12,6 +12,7 @@ const browsersync = require('browser-sync').create();
 const uglify = require('gulp-uglify');
 const argv = require('yargs').argv;
 const rename = require('gulp-rename');
+const preprocess = require('gulp-preprocess');
 
 var libs_prod = [
   'node_modules/angular2/bundles/angular2-polyfills.min.js',
@@ -54,6 +55,7 @@ gulp.task('browsersync', ['build'], function () {
 gulp.task('compile', function () {
   var compiler = gulp.src('app/**/*.ts')
     .pipe(sourcemaps.init())
+    .pipe(preprocess({ context: { PROD: production } }))
     .pipe(typescript(tscConfig.compilerOptions))
 
   if (production) {
@@ -79,9 +81,7 @@ gulp.task('sass', function () {
 gulp.task('copy:libs', function () {
   return gulp.src(production ? libs_prod : libs_dev)
     .pipe(rename(function(path) {
-      if (path.basename.indexOf("min") > 0) {
-        path.basename = path.basename.split('.')[0];
-      } else if (path.basename.indexOf("dev") > 0) {
+      if (path.basename.indexOf("min") > 0 || path.basename.indexOf('dev') > 0) {
         path.basename = path.basename.split('.')[0];
       }
     }))
