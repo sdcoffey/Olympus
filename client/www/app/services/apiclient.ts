@@ -6,13 +6,20 @@ import 'rxjs/Rx';
 import {OlympusClient} from "./client";
 
 @Injectable()
-export class ApiClient extends OlympusClient {
+export class ApiClient implements OlympusClient {
 
   constructor(private http: Http) {}
 
-  listFiles(id: string): Observable<NodeInfo[]> {
+  listNodes(id: string): Observable<NodeInfo[]> {
     return this.http.get(`/v1/ls/${id}`)
-      .map((res:Response) => res.json());
+      .map((res: Response) => {
+        var children = new Array<NodeInfo>();
+        var json_array = res.json();
+        for (var i = 0; i < json_array.length; i++) {
+          children.push(<NodeInfo>json_array[i]);
+        }
+        return children;
+    });
   }
 
   deleteNode(id: string): Observable<boolean> {

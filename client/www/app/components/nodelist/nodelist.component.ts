@@ -2,6 +2,7 @@ import {Component, OnInit, Input} from 'angular2/core';
 import {NodeInfo} from '../../models/nodeinfo';
 import {ApiClient} from '../../services/apiclient';
 import {Router, RouteParams} from 'angular2/router';
+import {OlympusClient} from "../../services/client";
 
 @Component({
   selector: 'node-list',
@@ -14,7 +15,7 @@ export class NodeListComponent implements OnInit {
   selectedIndex: number
 
   constructor(
-    private _api: ApiClient,
+    private _api: OlympusClient,
     private _routeParams: RouteParams,
     private _router: Router
   ) {
@@ -27,17 +28,9 @@ export class NodeListComponent implements OnInit {
 
   updateChildren(id: string) {
     this.parentId = id;
-    this._api.listFiles(this.parentId)
-      .subscribe((children: any[]) => {
-        this.children = new Array<NodeInfo>();
-        for (var i = 0; i < children.length; i++) {
-          this.children.push(new NodeInfo(
-            children[i].Id,
-            children[i].Name,
-            children[i].Size,
-            children[i].Mode
-          ));
-        }
+    this._api.listNodes(this.parentId)
+      .subscribe((children: NodeInfo[]) => {
+        this.children = children;
       });
   }
 
