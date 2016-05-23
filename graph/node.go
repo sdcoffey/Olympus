@@ -18,7 +18,6 @@ const (
 	nameLink   = "isNamed"
 	modeLink   = "modeLink"
 	mTimeLink  = "hasMTime"
-	sizeLink   = "hasSize"
 	typeLink   = "hasType"
 
 	timeFormat = time.RFC3339Nano
@@ -53,17 +52,13 @@ func (nd *Node) Name() string {
 	return nd.graphValue(nameLink)
 }
 
-func (nd *Node) Size() int64 {
-	if nd.IsDir() {
-		return 0
+func (nd *Node) Size() (sz int64) {
+	for _, block := range nd.Blocks() {
+		blockSize, _ := SizeOnDisk(block.Hash)
+		sz += blockSize
 	}
 
-	sizeString := nd.graphValue(sizeLink)
-	if size, err := strconv.ParseInt(sizeString, 10, 64); err != nil {
-		return 0
-	} else {
-		return size
-	}
+	return
 }
 
 func (nd *Node) Mode() os.FileMode {
@@ -136,21 +131,20 @@ func (nd *Node) Blocks() []BlockInfo {
 		return make([]BlockInfo, 0)
 	}
 
-	blockCap := nd.Size() / BLOCK_SIZE
-	if nd.Size()%BLOCK_SIZE > 0 {
-		blockCap++
-	}
+	blocks := make([]BlockInfo, 0, 4) // TODO: don't guess
 
-	blocks := make([]BlockInfo, 0, blockCap)
 	var i int64
-	for i = 0; i < nd.Size(); i += BLOCK_SIZE {
+	for i = 0; ; i += BLOCK_SIZE {
 		it := cayley.StartPath(nd.graph, nd.Id).Out(fmt.Sprint("offset-", i)).BuildIterator()
-		for cayley.RawNext(it) {
+		if cayley.RawNext(it) {
 			info := BlockInfo{
 				Hash:   nd.graph.NameOf(it.Result()),
 				Offset: i,
 			}
 			blocks = append(blocks, info)
+			break
+		} else {
+			return blocks
 		}
 	}
 
@@ -160,8 +154,6 @@ func (nd *Node) Blocks() []BlockInfo {
 func (nd *Node) WriteData(data []byte, offset int64) error {
 	if offset%BLOCK_SIZE != 0 {
 		return errors.New(fmt.Sprintf("%d is not a valid offset for block size %d", offset, BLOCK_SIZE))
-	} else if int64(len(data)) > nd.Size() {
-		return errors.New("Cannot write data that exceeds the size of file")
 	}
 
 	hash := Hash(data)
@@ -190,9 +182,6 @@ func (nd *Node) Save() (err error) {
 	} else if nd.mTime.After(time.Now()) {
 		nd.mTime = time.Time{}
 		return errors.New("Cannot set futuristic mTime")
-	} else if nd.size < 0 {
-		nd.size = 0
-		return errors.New("File cannot have negative size")
 	} else if (nd.mode&os.ModeDir > 0) && nd.size != 0 {
 		nd.mode = os.FileMode(0)
 		return errors.New("Dir cannot have non-zero size")
@@ -216,14 +205,6 @@ func (nd *Node) Save() (err error) {
 	if nd.mimeType != "" && nd.mimeType != nd.Type() {
 		newQuads.AddQuad(cayley.Quad(nd.Id, typeLink, nd.mimeType, ""))
 		nd.mimeType = ""
-	}
-
-	if size := nd.Size(); nd.size != size && size != 0 && nd.size != 0 {
-		staleQuads.RemoveQuad(cayley.Quad(nd.Id, sizeLink, fmt.Sprint(nd.Size()), ""))
-	}
-	if nd.size > 0 && nd.size != nd.Size() {
-		newQuads.AddQuad(cayley.Quad(nd.Id, sizeLink, fmt.Sprint(nd.size), ""))
-		nd.size = 0
 	}
 
 	if mode := int(nd.Mode()); int(nd.mode) != mode && mode != 0 && int(nd.mode) != 0 {
@@ -263,11 +244,6 @@ func (nd *Node) Save() (err error) {
 
 func (nd *Node) Chmod(newMode os.FileMode) error {
 	nd.mode = newMode
-	return nd.Save()
-}
-
-func (nd *Node) Resize(newSize int64) error {
-	nd.size = newSize
 	return nd.Save()
 }
 

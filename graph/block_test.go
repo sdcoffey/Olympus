@@ -1,17 +1,17 @@
 package graph
 
 import (
-	"io/ioutil"
-	"math/rand"
 	"path/filepath"
 	"testing"
+
+	"io/ioutil"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/env"
 )
 
 func TestReader_returnsCorrectReader(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := RandDat(1024)
 	blockFingerprint := Hash(dat)
@@ -31,7 +31,7 @@ func TestReader_returnsCorrectReader(t *testing.T) {
 }
 
 func TestHash(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := (RandDat(MEGABYTE))
 	fingerprint := Hash(dat)
@@ -39,7 +39,7 @@ func TestHash(t *testing.T) {
 }
 
 func TestHash_similarDataHashesDifferently(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat1 := RandDat(1024 * 1024)
 	dat2 := make([]byte, len(dat1))
@@ -55,7 +55,7 @@ func TestHash_similarDataHashesDifferently(t *testing.T) {
 }
 
 func TestWriteData_writesData(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := RandDat(MEGABYTE)
 	fingerprint := Hash(dat)
@@ -74,7 +74,7 @@ func TestWriteData_writesData(t *testing.T) {
 }
 
 func TestWrite_throwsIfWrongHash(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := RandDat(MEGABYTE)
 	fingerprint := "abcd"
@@ -85,7 +85,7 @@ func TestWrite_throwsIfWrongHash(t *testing.T) {
 }
 
 func TestWrite_throwsIfBadSize(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := RandDat(MEGABYTE + 1)
 	fingerprint := Hash(dat)
@@ -96,7 +96,7 @@ func TestWrite_throwsIfBadSize(t *testing.T) {
 }
 
 func TestSizeOnDisk_returnsCorrectSizeForHash(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := RandDat(1024)
 	fingerprint := Hash(dat)
@@ -110,7 +110,7 @@ func TestSizeOnDisk_returnsCorrectSizeForHash(t *testing.T) {
 }
 
 func TestSizeOnDisk_throwsForBadFingerprint(t *testing.T) {
-	testInit()
+	TestInit()
 
 	fingerprint := "abcd"
 	size, err := SizeOnDisk(fingerprint)
@@ -119,7 +119,7 @@ func TestSizeOnDisk_throwsForBadFingerprint(t *testing.T) {
 }
 
 func TestLocationOnDisk_returnsCorrectLocationForFingerprint(t *testing.T) {
-	testInit()
+	TestInit()
 
 	dat := RandDat(1024)
 	fingerprint := Hash(dat)
@@ -141,15 +141,4 @@ func BenchmarkBlockHash(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		Hash(dat)
 	}
-}
-
-var randGen *rand.Rand = rand.New(rand.NewSource(34))
-
-func RandDat(size int) []byte {
-	dat := make([]byte, size)
-	for i := 0; i < size; i++ {
-		dat[i] = byte(randGen.Intn(255))
-	}
-
-	return dat
 }

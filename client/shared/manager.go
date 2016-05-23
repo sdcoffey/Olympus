@@ -3,16 +3,17 @@ package shared
 import (
 	"bytes"
 	"errors"
-	"mime"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
+
+	"fmt"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/graph"
+	"github.com/sdcoffey/olympus/util"
 )
 
 type Manager struct {
@@ -69,28 +70,27 @@ func (manager *Manager) MoveNode(nodeId, newParentId, newName string) error {
 type ProgressCallback func(total, current int64)
 
 func (manager *Manager) UploadFile(parentId, localPath string, callback ProgressCallback) (*graph.Node, error) {
+	errorFmt := func(err error) error {
+		return fmt.Errorf("Error uploading file: %s", err.Error())
+	}
+
 	if fi, err := os.Stat(localPath); err != nil {
-		return nil, err
+		return nil, errorFmt(err)
 	} else if fi.IsDir() {
 		return nil, errors.New("Cannot upload a directory")
 	} else {
-		mimeType := mime.TypeByExtension(filepath.Ext(fi.Name()))
-		if strings.Contains(mimeType, ";") {
-			mimeType = strings.Split(mimeType, ";")[0]
-		}
-
 		nodeInfo := graph.NodeInfo{
 			Name:     filepath.Base(fi.Name()),
 			Size:     fi.Size(),
 			Mode:     0700,
 			MTime:    time.Now(),
 			ParentId: parentId,
-			Type:     mimeType,
+			Type:     util.MimeType(fi.Name()),
 		}
 		if newNode, err := manager.api.CreateNode(nodeInfo); err != nil {
-			return nil, err
+			return nil, errorFmt(err)
 		} else if localFile, err := os.Open(localPath); err != nil {
-			return nil, err
+			return nil, errorFmt(err)
 		} else {
 			defer localFile.Close()
 
@@ -106,7 +106,7 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 
 			wg.Add(numBlocks)
 			var uploadedBytes int64
-			for i := 0; i < 5; i++ {
+			for i := 0; i < 5; i++ { // TODO: min(numblocks, 5)
 				go func() {
 					for h := range uploadChan {
 						payloadSize := int64(len(h.data))
@@ -126,7 +126,7 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 			errChecker := func() error {
 				select {
 				case err := <-errChan:
-					return err
+					return errorFmt(err)
 				default:
 					return nil
 				}
@@ -136,17 +136,17 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 			for offset = 0; offset < fi.Size(); offset += graph.BLOCK_SIZE {
 				buf := make([]byte, min(fi.Size()-offset, graph.BLOCK_SIZE))
 				if _, err = localFile.ReadAt(buf, offset); err != nil {
-					return nil, err
+					return nil, errorFmt(err)
 				}
 				uploadChan <- heap{offset, buf}
 
 				if err := errChecker(); err != nil {
-					return nil, err
+					return nil, errorFmt(err)
 				}
 			}
 
 			if err := errChecker(); err != nil {
-				return nil, err
+				return nil, errorFmt(err)
 			}
 			wg.Wait()
 

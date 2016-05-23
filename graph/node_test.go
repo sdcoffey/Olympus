@@ -2,18 +2,16 @@ package graph
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
-	"github.com/sdcoffey/olympus/env"
 )
 
 func TestNewNode_hasUuidAndTimeStamp(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("root", ng)
 	assert.NotEmpty(t, node.Id)
@@ -22,7 +20,7 @@ func TestNewNode_hasUuidAndTimeStamp(t *testing.T) {
 }
 
 func TestNodeInfo(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	now := time.Now()
 
@@ -42,7 +40,7 @@ func TestNodeInfo(t *testing.T) {
 }
 
 func TestName(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.parentId = ng.RootNode.Id
@@ -53,14 +51,14 @@ func TestName(t *testing.T) {
 }
 
 func TestExists_returnsFalseIfNoName(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("", ng)
 	assert.False(t, node.Exists())
 }
 
 func TestExists_returnsTrueIfName(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("name", ng)
 	node.parentId = ng.RootNode.Id
@@ -70,7 +68,7 @@ func TestExists_returnsTrueIfName(t *testing.T) {
 }
 
 func TestType(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("style.css", ng)
 	node.parentId = ng.RootNode.Id
@@ -82,7 +80,7 @@ func TestType(t *testing.T) {
 }
 
 func TestSize(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.parentId = ng.RootNode.Id
@@ -93,7 +91,7 @@ func TestSize(t *testing.T) {
 }
 
 func TestMode(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.parentId = ng.RootNode.Id
@@ -104,7 +102,7 @@ func TestMode(t *testing.T) {
 }
 
 func TestIsDir_returnsTrueForCorrectMode(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.mode = os.ModeDir
@@ -115,7 +113,7 @@ func TestIsDir_returnsTrueForCorrectMode(t *testing.T) {
 }
 
 func TestIsDir_returnsFalseForIncorrectMode(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.mode = 123
@@ -126,7 +124,7 @@ func TestIsDir_returnsFalseForIncorrectMode(t *testing.T) {
 }
 
 func TestModTime(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.mTime = time.Now()
@@ -137,7 +135,7 @@ func TestModTime(t *testing.T) {
 }
 
 func TestChildren_returnsCorrectChildren(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	childNode1 := newNode("child1", ng)
 	childNode1.parentId = ng.RootNode.Id
@@ -171,7 +169,7 @@ func TestChildren_returnsCorrectChildren(t *testing.T) {
 }
 
 func TestParent(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	rootNode := ng.RootNode
 
@@ -187,7 +185,7 @@ func TestParent(t *testing.T) {
 }
 
 func TestSave(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	mTime := time.Now()
 
@@ -222,7 +220,7 @@ func TestSave(t *testing.T) {
 }
 
 func TestSave_overwriteExistingProperty(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("root", ng)
 	node.parentId = ng.RootNode.Id
@@ -245,14 +243,14 @@ func TestSave_overwriteExistingProperty(t *testing.T) {
 }
 
 func TestSave_returnsErrorWhenFileHasNoName(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("", ng)
 	assert.EqualError(t, node.Save(), "Cannot add nameless file")
 }
 
 func TestSave_returnsErrorWhenMTimeIsAfterNow(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.mTime = time.Now().Add(time.Second * 100)
@@ -260,7 +258,7 @@ func TestSave_returnsErrorWhenMTimeIsAfterNow(t *testing.T) {
 }
 
 func TestSave_returnsErrorWhenFileHasNegativeSize(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.size = -1
@@ -268,7 +266,7 @@ func TestSave_returnsErrorWhenFileHasNegativeSize(t *testing.T) {
 }
 
 func TestSave_returnsErrorWhenDirHasNonZeroSize(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	node.mode = os.ModeDir
@@ -277,14 +275,14 @@ func TestSave_returnsErrorWhenDirHasNonZeroSize(t *testing.T) {
 }
 
 func TestSave_returnsErrorWhenAddingNodeWithoutParent(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("child", ng)
 	assert.EqualError(t, node.Save(), "Cannot add file without parent")
 }
 
 func TestWriteData_writesDataToCorrectBlock(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
 	dat := RandDat(1024)
@@ -300,7 +298,7 @@ func TestWriteData_writesDataToCorrectBlock(t *testing.T) {
 }
 
 func TestWriteData_throwsOnInvalidBlockOffset(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
 	dat := RandDat(1024)
@@ -309,7 +307,7 @@ func TestWriteData_throwsOnInvalidBlockOffset(t *testing.T) {
 }
 
 func TestWriteData_throwsIfDataGreaterThanSize(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
 	dat := RandDat(1025)
@@ -318,7 +316,7 @@ func TestWriteData_throwsIfDataGreaterThanSize(t *testing.T) {
 }
 
 func TestWriteData_removesExistingFingerprintForOffset(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
 	dat := RandDat(1024)
@@ -335,7 +333,7 @@ func TestWriteData_removesExistingFingerprintForOffset(t *testing.T) {
 }
 
 func TestBlockWithOffset_findsCorrectBlock(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := makeNode("child", ng.RootNode.Id, MEGABYTE*2, time.Now(), ng)
 	data := RandDat(MEGABYTE)
@@ -352,21 +350,21 @@ func TestBlockWithOffset_findsCorrectBlock(t *testing.T) {
 }
 
 func TestBlockWithOffset_returnsEmptyStringForDir(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	fingerprint := ng.RootNode.BlockWithOffset(0)
 	assert.Equal(t, "", fingerprint)
 }
 
 func TestBlocks_returnsEmptySliceForDir(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	blocks := ng.RootNode.Blocks()
 	assert.EqualValues(t, 0, len(blocks))
 }
 
 func TestChmod_chmodsSuccessfully(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, err := makeNode("child", ng.RootNode.Id, 1, time.Now(), ng)
 	assert.NoError(t, err)
@@ -376,7 +374,7 @@ func TestChmod_chmodsSuccessfully(t *testing.T) {
 }
 
 func TestTouch_updatesMTime(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	then := time.Now().Add(-10 * time.Second)
 	child, _ := makeNode("child", ng.RootNode.Id, 1024, then, ng)
@@ -388,7 +386,7 @@ func TestTouch_updatesMTime(t *testing.T) {
 }
 
 func TestTouch_throwsIfDateInFuture(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, err := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
 	assert.NoError(t, err)
@@ -396,18 +394,8 @@ func TestTouch_throwsIfDateInFuture(t *testing.T) {
 	assert.EqualError(t, child.Touch(time.Now().Add(1*time.Second)), "Cannot set futuristic mTime")
 }
 
-func TestResize_resizesCorrectly(t *testing.T) {
-	ng := testInit()
-
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
-	assert.EqualValues(t, 1024, child.Size())
-
-	assert.NoError(t, child.Resize(1025))
-	assert.EqualValues(t, 1025, child.Size())
-}
-
 func TestNodeSeeker_readsCorrectData(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
 	dat := RandDat(1024)
@@ -434,7 +422,7 @@ func TestNodeSeeker_readsCorrectData(t *testing.T) {
 }
 
 func BenchmarkWrite(b *testing.B) {
-	ng := testInit()
+	ng := TestInit()
 	var err error
 
 	for i := 0; err == nil && i < b.N; i++ {
@@ -450,7 +438,7 @@ func BenchmarkWrite(b *testing.B) {
 }
 
 func BenchmarkName(b *testing.B) {
-	ng := testInit()
+	ng := TestInit()
 	node := newNode("child", ng)
 	node.parentId = ng.RootNode.Id
 	node.Save()
@@ -469,22 +457,5 @@ func makeNode(name, parentId string, size int64, mTime time.Time, graph *NodeGra
 		return nil, err
 	} else {
 		return node, nil
-	}
-}
-
-func testInit() *NodeGraph {
-	if dir, err := ioutil.TempDir(os.TempDir(), ".olympus"); err != nil {
-		panic(err)
-	} else {
-		os.Setenv("OLYMPUS_HOME", dir)
-		if err = env.InitializeEnvironment(); err != nil {
-			panic(err)
-		}
-		handle, _ := cayley.NewMemoryGraph()
-		if ng, err := NewGraph(handle); err != nil {
-			panic(err)
-		} else {
-			return ng
-		}
 	}
 }

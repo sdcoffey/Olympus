@@ -28,14 +28,10 @@ install:
 	cp build/bin/server /usr/local/bin/olympus
 	@olympus&
 
-copy-resources:
-	mkdir -p /usr/local/etc/olympus/www
-	cp -R client/www/app/* /usr/local/etc/olympus/www
-
 install-cli:
 	cp build/bin/cli /usr/local/bin/olympus-cli
 
-test: clean copy-resources
+test: clean
 	@go test -v ./...
 
 testcover: clean

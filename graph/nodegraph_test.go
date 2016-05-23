@@ -10,7 +10,7 @@ import (
 )
 
 func TestNodeWithNodeInfo(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	now := time.Now()
 	info := NodeInfo{
@@ -34,7 +34,7 @@ func TestNodeWithNodeInfo(t *testing.T) {
 }
 
 func TestNodeWithName(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node := newNode("root", ng)
 	node.parentId = ng.RootNode.Id
@@ -51,7 +51,7 @@ func TestNodeWithName(t *testing.T) {
 }
 
 func TestCreateDirectory(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, err := ng.CreateDirectory(ng.RootNode, "child")
 	assert.NoError(t, err)
@@ -62,7 +62,7 @@ func TestCreateDirectory(t *testing.T) {
 }
 
 func TestCreateDirectory_returnsErrorWhenParentNotDir(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	childNode := newNode("child", ng)
 	childNode.parentId = ng.RootNode.Id
@@ -73,14 +73,14 @@ func TestCreateDirectory_returnsErrorWhenParentNotDir(t *testing.T) {
 }
 
 func TestRemoveNode_throwsWhenDeletingRootNode(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	err := ng.RemoveNode(ng.RootNode)
 	assert.EqualError(t, err, "Cannot delete root node")
 }
 
 func TestRemoveNode_deletesAllChildNodes(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := ng.CreateDirectory(ng.RootNode, "child")
 	child2, _ := ng.CreateDirectory(ng.RootNode, "child2")
@@ -96,7 +96,7 @@ func TestRemoveNode_deletesAllChildNodes(t *testing.T) {
 }
 
 func TestMoveNode_movesNodeSuccessfully(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child1, err := ng.CreateDirectory(ng.RootNode, "child1")
 	assert.NoError(t, err)
@@ -116,8 +116,21 @@ func TestMoveNode_movesNodeSuccessfully(t *testing.T) {
 	assert.Equal(t, "child2", child.Name())
 }
 
+func TestMoveNode_changesTypeOnNameChange(t *testing.T) {
+	ng := TestInit()
+
+	child := newNode("abcd.txt", ng)
+	child.parentId = ng.RootNode.Id
+	child.Save()
+
+	err := ng.MoveNode(child, "abcd.json", ng.RootNode.Id)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "application/json", child.Type())
+}
+
 func TestMoveNode_renamesNodeSuccessfully(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child, _ := ng.CreateDirectory(ng.RootNode, "child")
 	assert.Equal(t, "child", child.Name())
@@ -128,13 +141,13 @@ func TestMoveNode_renamesNodeSuccessfully(t *testing.T) {
 }
 
 func TestMv_throwsWhenMovingRootNode(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	assert.EqualError(t, ng.MoveNode(ng.RootNode, "root", "abcd-new-parent"), "Cannot move root node")
 }
 
 func TestMv_throwsWhenMovingNodeInsideItself(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	node, err := ng.CreateDirectory(ng.RootNode, "child")
 	assert.NoError(t, err)
@@ -142,7 +155,7 @@ func TestMv_throwsWhenMovingNodeInsideItself(t *testing.T) {
 }
 
 func TestAddNode_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	_, err := ng.CreateDirectory(ng.RootNode, "child")
 	assert.NoError(t, err)
@@ -152,7 +165,7 @@ func TestAddNode_returnsAnErrorWhenDuplicateSiblingExists(t *testing.T) {
 }
 
 func TestAddChild_throwsWhenParentDoesNotExist(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	orphan := newNode("file", ng)
 	notnode := ng.NodeWithId("not-a-file")
@@ -160,7 +173,7 @@ func TestAddChild_throwsWhenParentDoesNotExist(t *testing.T) {
 }
 
 func TestRemoveNode_returnsErrorWhenNodeHasChildren(t *testing.T) {
-	ng := testInit()
+	ng := TestInit()
 
 	child1, err := ng.CreateDirectory(ng.RootNode, "child")
 	assert.NoError(t, err)

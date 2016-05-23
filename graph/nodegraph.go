@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
+	"github.com/sdcoffey/olympus/util"
 )
 
 const RootNodeId = "rootNode"
@@ -98,6 +99,7 @@ func (ng *NodeGraph) MoveNode(nd *Node, newName, newParentId string) (err error)
 
 	if nd.Name() != newName {
 		nd.name = newName
+		nd.mimeType = util.MimeType(nd.name)
 	}
 
 	newParent := ng.NodeWithId(newParentId)
@@ -109,7 +111,7 @@ func (ng *NodeGraph) MoveNode(nd *Node, newName, newParentId string) (err error)
 	return nil
 }
 
-func (ng *NodeGraph) addNode(parent, child *Node) (err error) {
+func (ng *NodeGraph) addNode(parent, child *Node) error {
 	if !parent.IsDir() {
 		return errors.New("Cannot add node to a non-directory")
 	} else if parent.Exists() && ng.NodeWithName(parent.Id, child.name) != nil {
@@ -140,8 +142,8 @@ func (ng *NodeGraph) removeNode(nd *Node) (err error) {
 	if nd.Parent() != nil {
 		transaction.RemoveQuad(cayley.Quad(nd.Id, parentLink, nd.Parent().Id, ""))
 	}
-	if nd.Size() > 0 {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, sizeLink, fmt.Sprint(nd.Size()), ""))
+	if nd.Type() != "" {
+		transaction.RemoveQuad(cayley.Quad(nd.Id, typeLink, fmt.Sprint(nd.Size()), ""))
 	}
 
 	err = ng.ApplyTransaction(transaction)

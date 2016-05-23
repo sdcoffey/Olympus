@@ -41,14 +41,14 @@ func (model *Model) Refresh() error {
 	}
 
 	if nodeInfos, err := model.api.ListNodes(model.Root.Id); err != nil {
-		return err
+		return fmt.Errorf("Error listing nodes: %s", err.Error())
 	} else {
 		var err error
 		for i := 0; i < len(nodeInfos) && err == nil; i++ {
 			nodeInfo := nodeInfos[i]
 			node := model.graph.NodeWithNodeInfo(nodeInfo)
 			if err = node.Save(); err != nil {
-				return err
+				return fmt.Errorf("Error refreshing model: %s", err.Error())
 			}
 			if _, ok := nodeSet[nodeInfo.Id]; ok {
 				delete(nodeSet, nodeInfo.Id)
