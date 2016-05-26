@@ -55,7 +55,6 @@ func (ng *NodeGraph) NodeWithNodeInfo(info NodeInfo) *Node {
 	node := ng.NodeWithId(info.Id)
 	node.name = info.Name
 	node.mode = os.FileMode(info.Mode)
-	node.size = info.Size
 	node.mTime = info.MTime
 	node.parentId = info.ParentId
 	node.mimeType = info.Type
@@ -150,7 +149,6 @@ func (ng *NodeGraph) removeNode(nd *Node) (err error) {
 
 	if err == nil {
 		nd.mode = os.FileMode(0)
-		nd.size = 0
 		nd.mTime = time.Time{}
 		nd.name = ""
 		nd.parentId = ""

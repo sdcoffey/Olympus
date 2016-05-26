@@ -53,7 +53,11 @@ func Write(hash string, d []byte) (int, error) {
 	}
 
 	if file, err := os.OpenFile(LocationOnDisk(hash), os.O_CREATE|os.O_EXCL|os.O_RDWR, os.FileMode(0644)); err != nil {
-		return 0, err
+		if os.IsExist(err) { // If we've already written this data, short circuit
+			return len(d), nil
+		} else {
+			return 0, err
+		}
 	} else {
 		syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
 		defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)

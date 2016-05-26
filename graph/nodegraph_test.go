@@ -27,7 +27,6 @@ func TestNodeWithNodeInfo(t *testing.T) {
 	assert.Equal(t, "abc", node.Id)
 	assert.Equal(t, "parent", node.parentId)
 	assert.Equal(t, "node", node.name)
-	assert.EqualValues(t, 1, node.size)
 	assert.Equal(t, now, node.mTime)
 	assert.EqualValues(t, 4, node.mode)
 	assert.Equal(t, "application/json", node.mimeType)

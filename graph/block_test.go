@@ -6,6 +6,9 @@ import (
 
 	"io/ioutil"
 
+	"os"
+	"time"
+
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/env"
 )
@@ -82,6 +85,32 @@ func TestWrite_throwsIfWrongHash(t *testing.T) {
 	n, err := Write(fingerprint, dat)
 	assert.Error(t, err)
 	assert.EqualValues(t, 0, n)
+}
+
+func TestWrite_doesNotDuplicateDataOnDisk(t *testing.T) {
+	TestInit()
+
+	dat := RandDat(MEGABYTE)
+	hash := Hash(dat)
+
+	_, err := Write(hash, dat)
+	assert.NoError(t, err)
+
+	location := LocationOnDisk(hash)
+	assert.NotEmpty(t, LocationOnDisk(hash))
+	fi, err := os.Stat(location)
+
+	createTime := fi.ModTime()
+
+	time.Sleep(time.Second)
+	_, err = Write(hash, dat)
+	assert.NoError(t, err)
+
+	fi, err = os.Stat(location)
+	assert.NoError(t, err)
+
+	assert.EqualValues(t, MEGABYTE, fi.Size())
+	assert.True(t, time.Now().Sub(createTime) >= time.Second)
 }
 
 func TestWrite_throwsIfBadSize(t *testing.T) {

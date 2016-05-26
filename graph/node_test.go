@@ -24,7 +24,7 @@ func TestNodeInfo(t *testing.T) {
 
 	now := time.Now()
 
-	child, err := makeNode("child", ng.RootNode.Id, 1024, now, ng)
+	child, err := makeNode("child", ng.RootNode.Id, now, ng)
 	assert.NoError(t, err)
 	child.mimeType = "application/octet-stream"
 	child.Save()
@@ -34,7 +34,6 @@ func TestNodeInfo(t *testing.T) {
 	assert.Equal(t, ng.RootNode.Id, info.ParentId)
 	assert.Equal(t, "child", info.Name)
 	assert.Equal(t, "application/octet-stream", info.Type)
-	assert.EqualValues(t, 1024, info.Size)
 	assert.Equal(t, now.Unix(), info.MTime.Unix())
 	assert.EqualValues(t, child.Mode(), info.Mode)
 }
@@ -73,7 +72,6 @@ func TestType(t *testing.T) {
 	node := newNode("style.css", ng)
 	node.parentId = ng.RootNode.Id
 	node.mimeType = "text/css"
-	node.size = 100
 	assert.NoError(t, node.Save())
 
 	assert.EqualValues(t, "text/css", node.Type())
@@ -84,10 +82,9 @@ func TestSize(t *testing.T) {
 
 	node := newNode("child", ng)
 	node.parentId = ng.RootNode.Id
-	node.size = 1024
 	assert.NoError(t, node.Save())
 
-	assert.EqualValues(t, 1024, node.Size())
+	t.Fatal("Not implemented")
 }
 
 func TestMode(t *testing.T) {
@@ -191,7 +188,6 @@ func TestSave(t *testing.T) {
 
 	node := newNode("child", ng)
 	node.parentId = ng.RootNode.Id
-	node.size = 1024
 	node.mode = os.FileMode(0755)
 	node.mTime = mTime
 	node.mimeType = "application/json"
@@ -205,9 +201,6 @@ func TestSave(t *testing.T) {
 
 	it := cayley.StartPath(ng, node.Id).Out(nameLink).BuildIterator()
 	assertProperty("child", it)
-
-	it = cayley.StartPath(ng, node.Id).Out(sizeLink).BuildIterator()
-	assertProperty("1024", it)
 
 	it = cayley.StartPath(ng, node.Id).Out(mTimeLink).BuildIterator()
 	assertProperty(mTime.Format(timeFormat), it)
@@ -225,19 +218,16 @@ func TestSave_overwriteExistingProperty(t *testing.T) {
 	node := newNode("root", ng)
 	node.parentId = ng.RootNode.Id
 	node.mode = 6
-	node.size = 1024
 	node.mimeType = "video/mp4"
 
 	assert.NoError(t, node.Save())
 
 	node.name = "root2"
-	node.size = 1025
 	node.mode = 7
 	node.mimeType = "audio/mp3"
 
 	assert.NoError(t, node.Save())
 	assert.Equal(t, "root2", node.Name())
-	assert.EqualValues(t, 1025, node.Size())
 	assert.EqualValues(t, 7, node.Mode())
 	assert.Equal(t, "audio/mp3", node.Type())
 }
@@ -257,23 +247,6 @@ func TestSave_returnsErrorWhenMTimeIsAfterNow(t *testing.T) {
 	assert.EqualError(t, node.Save(), "Cannot set futuristic mTime")
 }
 
-func TestSave_returnsErrorWhenFileHasNegativeSize(t *testing.T) {
-	ng := TestInit()
-
-	node := newNode("child", ng)
-	node.size = -1
-	assert.EqualError(t, node.Save(), "File cannot have negative size")
-}
-
-func TestSave_returnsErrorWhenDirHasNonZeroSize(t *testing.T) {
-	ng := TestInit()
-
-	node := newNode("child", ng)
-	node.mode = os.ModeDir
-	node.size = 1
-	assert.EqualError(t, node.Save(), "Dir cannot have non-zero size")
-}
-
 func TestSave_returnsErrorWhenAddingNodeWithoutParent(t *testing.T) {
 	ng := TestInit()
 
@@ -284,7 +257,7 @@ func TestSave_returnsErrorWhenAddingNodeWithoutParent(t *testing.T) {
 func TestWriteData_writesDataToCorrectBlock(t *testing.T) {
 	ng := TestInit()
 
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
+	child, _ := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	dat := RandDat(1024)
 	fingerprint := Hash(dat)
 
@@ -300,25 +273,16 @@ func TestWriteData_writesDataToCorrectBlock(t *testing.T) {
 func TestWriteData_throwsOnInvalidBlockOffset(t *testing.T) {
 	ng := TestInit()
 
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
+	child, _ := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	dat := RandDat(1024)
 
 	assert.EqualError(t, child.WriteData(dat, 1), fmt.Sprint("1 is not a valid offset for block size ", BLOCK_SIZE))
 }
 
-func TestWriteData_throwsIfDataGreaterThanSize(t *testing.T) {
-	ng := TestInit()
-
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
-	dat := RandDat(1025)
-
-	assert.EqualError(t, child.WriteData(dat, 0), "Cannot write data that exceeds the size of file")
-}
-
 func TestWriteData_removesExistingFingerprintForOffset(t *testing.T) {
 	ng := TestInit()
 
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
+	child, _ := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	dat := RandDat(1024)
 
 	assert.NoError(t, child.WriteData(dat, 0))
@@ -332,10 +296,25 @@ func TestWriteData_removesExistingFingerprintForOffset(t *testing.T) {
 	assert.Equal(t, fingerprint, ng.NameOf(it.Result()))
 }
 
+func TestWriteData_SizeChanges(t *testing.T) {
+	ng := TestInit()
+
+	child, _ := makeNode("child", ng.RootNode.Id, time.Now(), ng)
+	dat := RandDat(BLOCK_SIZE)
+	assert.NoError(t, child.WriteData(dat, 0))
+
+	assert.EqualValues(t, MEGABYTE, child.Size())
+
+	dat = RandDat(BLOCK_SIZE)
+	assert.NoError(t, child.WriteData(dat, BLOCK_SIZE))
+
+	assert.EqualValues(t, MEGABYTE*2, child.Size())
+}
+
 func TestBlockWithOffset_findsCorrectBlock(t *testing.T) {
 	ng := TestInit()
 
-	child, _ := makeNode("child", ng.RootNode.Id, MEGABYTE*2, time.Now(), ng)
+	child, _ := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	data := RandDat(MEGABYTE)
 	assert.NoError(t, child.WriteData(data, 0))
 
@@ -363,10 +342,32 @@ func TestBlocks_returnsEmptySliceForDir(t *testing.T) {
 	assert.EqualValues(t, 0, len(blocks))
 }
 
+func TestBlocks_returnsCorrectBlocks(t *testing.T) {
+	ng := TestInit()
+
+	child, err := makeNode("child", ng.RootNode.Id, time.Now(), ng)
+	assert.NoError(t, err)
+
+	block1 := RandDat(MEGABYTE)
+	block2 := RandDat(MEGABYTE)
+
+	assert.NoError(t, child.WriteData(block1, 0))
+	assert.NoError(t, child.WriteData(block2, MEGABYTE))
+
+	blocks := child.Blocks()
+	assert.Len(t, blocks, 2)
+
+	assert.EqualValues(t, 0, blocks[0].Offset)
+	assert.EqualValues(t, MEGABYTE, blocks[1].Offset)
+
+	assert.Equal(t, Hash(block1), blocks[0].Hash)
+	assert.Equal(t, Hash(block2), blocks[1].Hash)
+}
+
 func TestChmod_chmodsSuccessfully(t *testing.T) {
 	ng := TestInit()
 
-	child, err := makeNode("child", ng.RootNode.Id, 1, time.Now(), ng)
+	child, err := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	assert.NoError(t, err)
 
 	assert.NoError(t, child.Chmod(os.FileMode(0777)))
@@ -377,7 +378,7 @@ func TestTouch_updatesMTime(t *testing.T) {
 	ng := TestInit()
 
 	then := time.Now().Add(-10 * time.Second)
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, then, ng)
+	child, _ := makeNode("child", ng.RootNode.Id, then, ng)
 
 	now := time.Now()
 	assert.NoError(t, child.Touch(now))
@@ -388,7 +389,7 @@ func TestTouch_updatesMTime(t *testing.T) {
 func TestTouch_throwsIfDateInFuture(t *testing.T) {
 	ng := TestInit()
 
-	child, err := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
+	child, err := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	assert.NoError(t, err)
 
 	assert.EqualError(t, child.Touch(time.Now().Add(1*time.Second)), "Cannot set futuristic mTime")
@@ -397,7 +398,7 @@ func TestTouch_throwsIfDateInFuture(t *testing.T) {
 func TestNodeSeeker_readsCorrectData(t *testing.T) {
 	ng := TestInit()
 
-	child, _ := makeNode("child", ng.RootNode.Id, 1024, time.Now(), ng)
+	child, _ := makeNode("child", ng.RootNode.Id, time.Now(), ng)
 	dat := RandDat(1024)
 
 	assert.NoError(t, child.WriteData(dat, 0))
@@ -448,10 +449,9 @@ func BenchmarkName(b *testing.B) {
 	}
 }
 
-func makeNode(name, parentId string, size int64, mTime time.Time, graph *NodeGraph) (*Node, error) {
+func makeNode(name, parentId string, mTime time.Time, graph *NodeGraph) (*Node, error) {
 	node := newNode(name, graph)
 	node.parentId = parentId
-	node.size = size
 	node.mTime = mTime
 	if err := node.Save(); err != nil {
 		return nil, err

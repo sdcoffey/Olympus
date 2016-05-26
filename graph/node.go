@@ -33,7 +33,6 @@ type Node struct {
 	graph    *NodeGraph
 	parentId string
 	name     string
-	size     int64
 	mTime    time.Time
 	mode     os.FileMode
 	mimeType string
@@ -142,7 +141,6 @@ func (nd *Node) Blocks() []BlockInfo {
 				Offset: i,
 			}
 			blocks = append(blocks, info)
-			break
 		} else {
 			return blocks
 		}
@@ -160,10 +158,11 @@ func (nd *Node) WriteData(data []byte, offset int64) error {
 	transaction := graph.NewTransaction()
 
 	// Determine if we already have a block for this offset
+	linkName := fmt.Sprint("offset-", offset)
 	if existingBlockHash := nd.BlockWithOffset(offset); existingBlockHash != "" {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, fmt.Sprint("offset-", offset), string(existingBlockHash), ""))
+		transaction.RemoveQuad(cayley.Quad(nd.Id, linkName, string(existingBlockHash), ""))
 	}
-	transaction.AddQuad(cayley.Quad(nd.Id, fmt.Sprint("offset-", offset), hash, ""))
+	transaction.AddQuad(cayley.Quad(nd.Id, linkName, hash, ""))
 
 	if err := nd.graph.ApplyTransaction(transaction); err != nil {
 		return err
@@ -182,9 +181,6 @@ func (nd *Node) Save() (err error) {
 	} else if nd.mTime.After(time.Now()) {
 		nd.mTime = time.Time{}
 		return errors.New("Cannot set futuristic mTime")
-	} else if (nd.mode&os.ModeDir > 0) && nd.size != 0 {
-		nd.mode = os.FileMode(0)
-		return errors.New("Dir cannot have non-zero size")
 	} else if nd.Parent() == nil && nd.parentId == "" && nd.Id != RootNodeId {
 		return errors.New("Cannot add file without parent")
 	}
