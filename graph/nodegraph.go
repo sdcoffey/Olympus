@@ -63,7 +63,7 @@ func (ng *NodeGraph) NodeWithNodeInfo(info NodeInfo) *Node {
 }
 
 func (ng *NodeGraph) RemoveNode(nd *Node) (err error) {
-	if nd.Id == ng.RootNode.Id && nd.Parent() == nil {
+	if nd.Id == ng.RootNode.Id {
 		return errors.New("Cannot delete root node")
 	}
 

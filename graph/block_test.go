@@ -1,12 +1,10 @@
 package graph
 
 import (
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
-
-	"io/ioutil"
-
-	"os"
 	"time"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"

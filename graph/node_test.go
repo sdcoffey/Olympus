@@ -84,7 +84,27 @@ func TestSize(t *testing.T) {
 	node.parentId = ng.RootNode.Id
 	assert.NoError(t, node.Save())
 
-	t.Fatal("Not implemented")
+	assert.NoError(t, node.WriteData(RandDat(MEGABYTE), 0))
+	assert.NoError(t, node.WriteData(RandDat(1024), MEGABYTE))
+
+	assert.EqualValues(t, MEGABYTE+1024, node.Size())
+}
+
+func BenchmarkSize(b *testing.B) {
+	ng := TestInit()
+
+	node := newNode("child", ng)
+	node.parentId = ng.RootNode.Id
+	assert.NoError(b, node.Save())
+
+	for i := 0; i < 10; i++ {
+		assert.NoError(b, node.WriteData(RandDat(MEGABYTE), int64(i*MEGABYTE)))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		node.Size()
+	}
 }
 
 func TestMode(t *testing.T) {

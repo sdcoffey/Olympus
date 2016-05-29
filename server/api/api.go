@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/gob"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -37,15 +38,14 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 
 	restApi := OlympusApi{r, ng}
 
-	v1Router.HandleFunc("/ls/{parentId}", restApi.ListNodes).Methods("GET")
-	v1Router.HandleFunc("/ls/{nodeId}/blocks", restApi.Blocks).Methods("GET")
-	v1Router.HandleFunc("/dd/{nodeId}/{offset}", restApi.WriteBlock).Methods("POST")
-	v1Router.HandleFunc("/mv/{nodeId}/{newParentId}", restApi.MoveNode).Methods("PATCH")
-	v1Router.HandleFunc("/rm/{nodeId}", restApi.RemoveNode).Methods("DELETE")
-	v1Router.HandleFunc("/cr/{parentId}", restApi.CreateNode).Methods("POST")
-	v1Router.HandleFunc("/update/{nodeId}", restApi.UpdateNode).Methods("PATCH")
-	v1Router.HandleFunc("/cat/{nodeId}/{offset}", restApi.ReadBlock).Methods("GET")
-	v1Router.HandleFunc("/dl/{nodeId}", restApi.DownloadFile).Methods("GET")
+	v1Router.HandleFunc(ListNodes.Template(), restApi.ListNodes).Methods(ListNodes.Verb)
+	v1Router.HandleFunc(ListBlocks.Template(), restApi.Blocks).Methods(ListBlocks.Verb)
+	v1Router.HandleFunc(WriteBlock.Template(), restApi.WriteBlock).Methods(WriteBlock.Verb)
+	v1Router.HandleFunc(RemoveNode.Template(), restApi.RemoveNode).Methods(RemoveNode.Verb)
+	v1Router.HandleFunc(CreateNode.Template(), restApi.CreateNode).Methods(CreateNode.Verb)
+	v1Router.HandleFunc(UpdateNode.Template(), restApi.UpdateNode).Methods(UpdateNode.Verb)
+	v1Router.HandleFunc(ReadBlock.Template(), restApi.ReadBlock).Methods(ReadBlock.Verb)
+	v1Router.HandleFunc(DownloadNode.Template(), restApi.DownloadFile).Methods(ReadBlock.Verb)
 
 	blockServer := http.FileServer(http.Dir(env.EnvPath(env.DataPath)))
 	r.Handle("/block/{blockId}", http.StripPrefix("/block/", blockServer))
@@ -54,22 +54,28 @@ func NewApi(ng *graph.NodeGraph) OlympusApi {
 }
 
 func encoderFromHeader(w io.Writer, header http.Header) Encoder {
-	if header.Get("Accept") == "application/gob" {
+	switch header.Get("Accept") {
+	case string(GobEncoding):
 		return gob.NewEncoder(w)
-	} else {
+	case string(XmlEncoding):
+		return xml.NewEncoder(w)
+	default:
 		return json.NewEncoder(w)
 	}
 }
 
 func decoderFromHeader(body io.Reader, header http.Header) Decoder {
-	if header.Get("Content-Type") == "application/gob" {
+	switch header.Get("Content-Type") {
+	case string(GobEncoding):
 		return gob.NewDecoder(body)
-	} else {
+	case string(XmlEncoding):
+		return xml.NewDecoder(body)
+	default:
 		return json.NewDecoder(body)
 	}
 }
 
-// GET v1/dl/{nodeId}
+// GET v1/node/{nodeId}/stream
 func (restApi OlympusApi) DownloadFile(writer http.ResponseWriter, req *http.Request) {
 	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
 	if !node.Exists() {
@@ -115,7 +121,7 @@ func (restApi OlympusApi) listNodes(parentNode *graph.Node, watermark, limit int
 	return response
 }
 
-// GET v1/ls/{parentId}?watermark=<int>&limit=<int>
+// GET v1/node/{parentId}?watermark=<int>&limit=<int>
 func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Request) {
 	parentNode := restApi.graph.NodeWithId(paramFromRequest("parentId", req))
 	if !parentNode.Exists() {
@@ -142,7 +148,7 @@ func (restApi OlympusApi) ListNodes(writer http.ResponseWriter, req *http.Reques
 	encoder.Encode(restApi.listNodes(parentNode, watermark, limit))
 }
 
-// DELETE /v1/rm/{nodeId}
+// DELETE /v1/node/{nodeId}
 func (restApi OlympusApi) RemoveNode(writer http.ResponseWriter, req *http.Request) {
 	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
 	if !node.Exists() {
@@ -158,34 +164,7 @@ func (restApi OlympusApi) RemoveNode(writer http.ResponseWriter, req *http.Reque
 	}
 }
 
-// PATCH /mv/{nodeId}/{newParentId}?rename={newName}
-func (restApi OlympusApi) MoveNode(writer http.ResponseWriter, req *http.Request) {
-	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
-	if !node.Exists() {
-		writeNodeNotFoundError(node.Id, writer)
-		return
-	}
-
-	newParent := restApi.graph.NodeWithId(paramFromRequest("newParentId", req))
-	if !newParent.Exists() {
-		writeNodeNotFoundError(newParent.Id, writer)
-		return
-	}
-
-	newName := req.URL.Query().Get("rename")
-	if newName == "" {
-		newName = node.Name()
-	}
-
-	err := restApi.graph.MoveNode(node, newName, newParent.Id)
-	if err != nil {
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
-	} else {
-		writer.WriteHeader(http.StatusOK)
-	}
-}
-
-// POST v1/cr/{parentId}
+// POST v1/node/{parentId}
 // body -> {nodeInfo}
 // returns -> {nodeInfo}
 func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Request) {
@@ -227,7 +206,7 @@ func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Reque
 	}
 }
 
-// PATCH v1/update/{nodeId}
+// PATCH v1/node/{nodeId}
 // body -> {nodeInfo}
 func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Request) {
 	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
@@ -248,10 +227,17 @@ func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Reque
 
 	changes := []func() error{
 		func() error {
-			return restApi.graph.MoveNode(node, nodeInfo.Name, node.Parent().Id)
+			newParentId := node.Parent().Id
+			if nodeInfo.ParentId != "" {
+				newParentId = nodeInfo.ParentId
+			}
+			return restApi.graph.MoveNode(node, nodeInfo.Name, newParentId)
 		},
 		func() error {
-			return node.Chmod(os.FileMode(nodeInfo.Mode))
+			if node.Mode() != os.FileMode(nodeInfo.Mode) {
+				return node.Chmod(os.FileMode(nodeInfo.Mode))
+			}
+			return nil
 		},
 		func() error {
 			return node.Touch(nodeInfo.MTime)
@@ -269,8 +255,8 @@ func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Reque
 	}
 }
 
-// GET v1/ls/{nodeId}/blocks
-// returns -> [BlockInfo] (hashes we don't have)
+// GET v1/node/{nodeId}/blocks
+// returns -> [BlockInfo] (hashes associated with this file)
 func (restApi OlympusApi) Blocks(writer http.ResponseWriter, req *http.Request) {
 	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
 	if !node.Exists() {
@@ -288,7 +274,7 @@ func (restApi OlympusApi) Blocks(writer http.ResponseWriter, req *http.Request) 
 	encoder.Encode(blocks)
 }
 
-// POST v1/dd/{nodeId}/{offset}
+// PUT v1/node/{nodeId}/{offset}
 func (restApi OlympusApi) WriteBlock(writer http.ResponseWriter, req *http.Request) {
 	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
 	if !node.Exists() {
@@ -322,7 +308,7 @@ func (restApi OlympusApi) WriteBlock(writer http.ResponseWriter, req *http.Reque
 	}
 }
 
-// GET cat/{nodeId}/{offset}
+// GET v1/node/{nodeId}/{offset}
 func (restApi OlympusApi) ReadBlock(writer http.ResponseWriter, req *http.Request) {
 	node := restApi.graph.NodeWithId(paramFromRequest("nodeId", req))
 	if !node.Exists() {

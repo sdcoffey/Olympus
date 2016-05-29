@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
-	"errors"
-	"fmt"
-
-	"os"
+	"encoding/xml"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/graph"
@@ -40,10 +40,15 @@ func setup() *graph.NodeGraph {
 
 func TestEncoderFromHeader_returnsCorrectEncoder(t *testing.T) {
 	header := http.Header(make(map[string][]string))
-	header.Add("Accept", "application/gob")
+	header.Set("Accept", string(GobEncoding))
 
 	encoder := encoderFromHeader(nil, header)
 	assert.IsType(t, &gob.Encoder{}, encoder)
+
+	header.Set("Accept", string(XmlEncoding))
+
+	encoder = encoderFromHeader(nil, header)
+	assert.IsType(t, &xml.Encoder{}, encoder)
 }
 
 func TestEncoderFromHeader_returnsJsonEcoderByDefault(t *testing.T) {
@@ -55,10 +60,15 @@ func TestEncoderFromHeader_returnsJsonEcoderByDefault(t *testing.T) {
 
 func TestDecoderFromHeader_returnsCorrectDecoder(t *testing.T) {
 	header := http.Header(make(map[string][]string))
-	header.Add("Content-Type", "application/gob")
+	header.Set("Content-Type", string(GobEncoding))
 
 	decoder := decoderFromHeader(nil, header)
 	assert.IsType(t, &gob.Decoder{}, decoder)
+
+	header.Set("Content-Type", string(XmlEncoding))
+
+	decoder = decoderFromHeader(nil, header)
+	assert.IsType(t, &xml.Decoder{}, decoder)
 }
 
 func TestDecoderFromHeader_returnsJsonDecoderByDefault(t *testing.T) {
@@ -68,21 +78,22 @@ func TestDecoderFromHeader_returnsJsonDecoderByDefault(t *testing.T) {
 	assert.IsType(t, &json.Decoder{}, decoder)
 }
 
-func TestListNodes_returnsErrorIfFileNotExist(t *testing.T) {
+func TestListNodes_returns404IfFileNotExist(t *testing.T) {
 	setup()
 
-	req := request("GET", "/ls/not-an-id", nil)
+	req := request(ListNodes.Build("not-a-node"), nil)
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
 	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
-	assert.Equal(t, "Node with id: not-an-id does not exist\n", msg(resp))
+	assert.Contains(t, msg(resp), "Node with id: not-a-node does not exist")
 }
 
-func TestLsFiles_returnsFilesForValidParent(t *testing.T) {
+func TestListNodes_returnsFilesForValidParent(t *testing.T) {
 	nodeGraph := setup()
 
-	req := request("GET", "/ls/"+graph.RootNodeId, nil)
+	endpoint := ListNodes.Build(graph.RootNodeId)
+	req := request(endpoint, nil)
 	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
 
 	resp, err := client.Do(req)
@@ -98,9 +109,10 @@ func TestLsFiles_returnsFilesForValidParent(t *testing.T) {
 	assert.Equal(t, "child", file.Name)
 }
 
-func TestLsFiles_returnsNFilesWhenLimitProvided(t *testing.T) {
+func TestListNodes_returnsNFilesWhenLimitProvided(t *testing.T) {
 	nodeGraph := setup()
-	req := request("GET", "/ls/"+graph.RootNodeId+"?limit=1", nil)
+
+	req := request(ListNodes.Build(graph.RootNodeId).Query("limit", "1"), nil)
 	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child1")
 	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
 
@@ -117,9 +129,11 @@ func TestLsFiles_returnsNFilesWhenLimitProvided(t *testing.T) {
 	assert.Equal(t, "child1", file.Name)
 }
 
-func TestLsFiles_startsWithNFileWhenWatermarkProvided(t *testing.T) {
+func TestListNodes_startsWithNFileWhenWatermarkProvided(t *testing.T) {
 	nodeGraph := setup()
-	req := request("GET", "/ls/"+graph.RootNodeId+"?watermark=1", nil)
+
+	endpoint := ListNodes.Build(graph.RootNodeId).Query("watermark", "1")
+	req := request(endpoint, nil)
 	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child1")
 	nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
 
@@ -139,7 +153,8 @@ func TestLsFiles_startsWithNFileWhenWatermarkProvided(t *testing.T) {
 func TestRmFile_returnsErrorIfFileNotExist(t *testing.T) {
 	setup()
 
-	req := request("DELETE", "/rm/child", nil)
+	endpoint := RemoveNode.Build("child")
+	req := request(endpoint, nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -152,89 +167,14 @@ func TestRmFile_removesFileSuccessfully(t *testing.T) {
 	nodeGraph := setup()
 
 	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
-	req := request("DELETE", "/rm/"+node.Id, nil)
+	endpoint := RemoveNode.Build(node.Id)
+	req := request(endpoint, nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
 
 	assert.EqualValues(t, 0, len(nodeGraph.RootNode.Children()))
-}
-
-func TestMvFile_returnsErrorIfFileNotExist(t *testing.T) {
-	nodeGraph := setup()
-
-	req := request("PATCH", "/mv/not-an-id/"+nodeGraph.RootNode.Id, nil)
-
-	resp, err := client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
-	assert.Equal(t, "Node with id: not-an-id does not exist\n", msg(resp))
-}
-
-func TestMvFile_returnsErrorIfNewParentNotExist(t *testing.T) {
-	nodeGraph := setup()
-
-	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
-	req := request("PATCH", "/mv/"+node.Id+"/not-a-parent", nil)
-
-	resp, err := client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
-	assert.Equal(t, "Node with id: not-a-parent does not exist\n", msg(resp))
-}
-
-func TestMvFile_movesFileSuccessfully(t *testing.T) {
-	nodeGraph := setup()
-
-	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
-	node2, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
-
-	req := request("PATCH", "/mv/"+node.Id+"/"+node2.Id, nil)
-
-	resp, err := client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
-
-	assert.EqualValues(t, 1, len(nodeGraph.RootNode.Children()))
-	assert.EqualValues(t, 1, len(node2.Children()))
-}
-
-func TestMvFile_renameInPlaceWorksSuccessfully(t *testing.T) {
-	nodeGraph := setup()
-
-	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
-
-	url := fmt.Sprintf("/mv/%s/%s?rename=%s", node.Id, node.Parent().Id, "renamedChild")
-	req := request("PATCH", url, nil)
-
-	resp, err := client.Do(req)
-
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
-
-	assert.Equal(t, "renamedChild", nodeGraph.RootNode.Children()[0].Name())
-}
-
-func TestMvFile_renameAndMoveWorksSuccessfully(t *testing.T) {
-	nodeGraph := setup()
-
-	node, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child")
-	node2, _ := nodeGraph.CreateDirectory(nodeGraph.RootNode, "child2")
-
-	url := fmt.Sprintf("/mv/%s/%s?rename=%s", node.Id, node2.Id, "renamedChild")
-	req := request("PATCH", url, nil)
-
-	resp, err := client.Do(req)
-
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
-
-	assert.EqualValues(t, 1, len(nodeGraph.RootNode.Children()))
-	assert.Equal(t, node2.Id, nodeGraph.RootNode.Children()[0].Id)
-
-	assert.Equal(t, 1, len(node2.Children()))
-	assert.Equal(t, "renamedChild", node2.Children()[0].Name())
 }
 
 func TestCreateNode_returnsErrorForMissingParent(t *testing.T) {
@@ -247,8 +187,8 @@ func TestCreateNode_returnsErrorForMissingParent(t *testing.T) {
 		Type: "application/text",
 	}
 
-	url := fmt.Sprintf("/cr/%s", "not-a-parent")
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build("not-a-parent")
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -267,8 +207,8 @@ func TestCreateNode_ignoresParentIdInBody(t *testing.T) {
 		Type:     "application/text",
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -290,8 +230,8 @@ func TestCreateNode_ignoresMTimeInBody(t *testing.T) {
 		Type:  "application/text",
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -313,8 +253,8 @@ func TestCreateNode_ignoresSizeInBody(t *testing.T) {
 		Type: "application/text",
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -332,8 +272,8 @@ func TestCreateNode_getsTypeFromExtension(t *testing.T) {
 		Size: 1024,
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -353,24 +293,23 @@ func TestCreateNode_usesTypeInBodyIfProvided(t *testing.T) {
 		Type: "application/json",
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
 	assert.Equal(t, "application/json", nodeGraph.RootNode.Children()[0].Type())
 }
 
 func TestCreateNode_returns400ForJunkData(t *testing.T) {
-	nodeGraph := setup()
+	setup()
 
 	ni := "not real data"
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -388,8 +327,8 @@ func TestCreateNode_returns400WhenNodeExists(t *testing.T) {
 		Name: "child",
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -407,8 +346,8 @@ func TestCreateNode_createsNodeSuccessfully(t *testing.T) {
 		Mode: 0755,
 	}
 
-	url := fmt.Sprintf("/cr/%s", nodeGraph.RootNode.Id)
-	req := request("POST", url, encode(ni))
+	endpoint := CreateNode.Build(graph.RootNodeId)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -440,8 +379,8 @@ func TestUpdateNode_updatesNode(t *testing.T) {
 	ni.Name = "abcd.ghi"
 	ni.Mode = 0700
 
-	url := fmt.Sprintf("/update/%s", id)
-	req := request("PATCH", url, encode(ni))
+	endpoint := UpdateNode.Build(id)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -467,8 +406,8 @@ func TestUpdateNode_ignoresNewSize(t *testing.T) {
 
 	ni.Size = 1024
 
-	url := fmt.Sprintf("/update/%s", id)
-	req := request("PATCH", url, encode(ni))
+	endpoint := UpdateNode.Build(id)
+	req := request(endpoint, encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -488,13 +427,61 @@ func TestUpdateNode_returns404ForMissingNode(t *testing.T) {
 		Size: 1024,
 	}
 
-	url := "/update/not-an-id"
-	req := request("PATCH", url, encode(ni))
+	req := request(UpdateNode.Build("not-an-id"), encode(ni))
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
 	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestUpdateNode_movesFileSuccessfully(t *testing.T) {
+	nodeGraph := setup()
+
+	folder, err := nodeGraph.CreateDirectory(nodeGraph.RootNode, "folder 1")
+	assert.NoError(t, err)
+
+	nodeInfo := graph.NodeInfo{
+		Name: "file.txt",
+		Mode: 0755,
+	}
+	id, err := createNodeWithSize(nodeGraph.RootNode.Id, nodeInfo, 1024)
+	assert.NoError(t, err)
+
+	nodeInfo.ParentId = folder.Id
+
+	req := request(UpdateNode.Build(id), encode(nodeInfo))
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Empty(t, msg(resp))
+
+	assert.Len(t, folder.Children(), 1)
+	assert.Equal(t, "file.txt", folder.Children()[0].Name())
+}
+
+func TestUpdateNode_renameAndMoveWorksSuccessfully(t *testing.T) {
+	nodeGraph := setup()
+
+	folder, err := nodeGraph.CreateDirectory(nodeGraph.RootNode, "folder 1")
+	assert.NoError(t, err)
+
+	nodeInfo := graph.NodeInfo{
+		Name: "file.txt",
+		Mode: 0755,
+	}
+	id, err := createNodeWithSize(nodeGraph.RootNode.Id, nodeInfo, 1024)
+	assert.NoError(t, err)
+
+	nodeInfo.Name = "file.pdf"
+	nodeInfo.ParentId = folder.Id
+
+	req := request(UpdateNode.Build(id), encode(nodeInfo))
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Empty(t, msg(resp))
+
+	assert.Len(t, folder.Children(), 1)
+	assert.Equal(t, "file.pdf", folder.Children()[0].Name())
 }
 
 func TestBlocks_listsBlocksForNode(t *testing.T) {
@@ -511,8 +498,7 @@ func TestBlocks_listsBlocksForNode(t *testing.T) {
 	hash, err := writeBlock(graph.BLOCK_SIZE, 0, id)
 	assert.NoError(t, err)
 
-	url := fmt.Sprintf("/ls/%s/blocks", id)
-	req := request("GET", url, nil)
+	req := request(ListBlocks.Build(id), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -530,8 +516,7 @@ func TestBlocks_listsBlocksForNode(t *testing.T) {
 func TestBlocks_returns404ForMissingNode(t *testing.T) {
 	setup()
 
-	url := fmt.Sprintf("/ls/%s/blocks", "abcd")
-	req := request("GET", url, nil)
+	req := request(ListBlocks.Build("abcd"), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -539,10 +524,9 @@ func TestBlocks_returns404ForMissingNode(t *testing.T) {
 }
 
 func TestBlocks_returns400ForDir(t *testing.T) {
-	nodeGraph := setup()
+	setup()
 
-	url := fmt.Sprintf("/ls/%s/blocks", nodeGraph.RootNode.Id)
-	req := request("GET", url, nil)
+	req := request(ListBlocks.Build(graph.RootNodeId), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -552,9 +536,8 @@ func TestBlocks_returns400ForDir(t *testing.T) {
 func TestWriteBlock_returns404ForMissingNode(t *testing.T) {
 	setup()
 
-	url := "/dd/node/0"
 	_, data := fileData(graph.MEGABYTE)
-	req := request("POST", url, data)
+	req := request(WriteBlock.Build("node", 0), data)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -592,9 +575,9 @@ func TestWriteBlock_returns400ForMismatchedHashes(t *testing.T) {
 	id, err := createNode(graph.RootNodeId, nodeInfo)
 	assert.NoError(t, err)
 
-	url := fmt.Sprintf("/dd/%s/0", id)
 	_, dat := fileData(graph.MEGABYTE)
-	req := request("POST", url, dat)
+
+	req := request(WriteBlock.Build(id, 0), dat)
 	req.Header.Add("Content-Hash", "bad hash")
 
 	resp, err := client.Do(req)
@@ -615,9 +598,8 @@ func TestWriteBlock_returns400ForInvalidOffset(t *testing.T) {
 	assert.NoError(t, err)
 
 	offset := 12
-	url := fmt.Sprintf("/dd/%s/%d", id, offset)
 	hash, dat := fileData(graph.MEGABYTE)
-	req := request("POST", url, dat)
+	req := request(WriteBlock.Build(id, offset), dat)
 	req.Header.Add("Content-Hash", hash)
 
 	resp, err := client.Do(req)
@@ -638,8 +620,7 @@ func TestWriteBlock_returns400OnNoData(t *testing.T) {
 	assert.NoError(t, err)
 
 	offset := 12
-	url := fmt.Sprintf("/dd/%s/%d", id, offset)
-	req := request("POST", url, nil)
+	req := request(WriteBlock.Build(id, offset), nil)
 	resp, err := client.Do(req)
 
 	assert.NoError(t, err)
@@ -657,10 +638,10 @@ func TestWriteBlock_returns400ForJunkOffest(t *testing.T) {
 	id, err := createNode(graph.RootNodeId, nodeInfo)
 	assert.NoError(t, err)
 
-	offset := "junk-stuff"
-	url := fmt.Sprintf("/dd/%s/%s", id, offset)
 	hash, dat := fileData(graph.MEGABYTE)
-	req := request("POST", url, dat)
+
+	offset := "junk-stuff"
+	req := request(WriteBlock.Build(id, offset), dat)
 	req.Header.Add("Content-Hash", hash)
 
 	resp, err := client.Do(req)
@@ -673,7 +654,7 @@ func TestWriteBlock_returns400ForJunkOffest(t *testing.T) {
 func TestReadBlock_returns404ForMissingNode(t *testing.T) {
 	setup()
 
-	req := request("GET", "/cat/not-a-node/0", nil)
+	req := request(ReadBlock.Build("abcd", 0), nil)
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
@@ -689,8 +670,7 @@ func TestReadBlock_returns400ForDir(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	url := fmt.Sprintf("/cat/%s/0", id)
-	req := request("GET", url, nil)
+	req := request(ReadBlock.Build(id, 0), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -709,8 +689,7 @@ func TestReadBlock_returns404ForMisalignedOffset(t *testing.T) {
 	assert.NoError(t, err)
 
 	offset := 1
-	url := fmt.Sprintf("/cat/%s/%d", id, offset)
-	req := request("GET", url, nil)
+	req := request(ReadBlock.Build(id, offset), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -729,8 +708,7 @@ func TestReadBlock_returns400ForJunkOffset(t *testing.T) {
 	assert.NoError(t, err)
 
 	offset := "junk"
-	url := fmt.Sprintf("/cat/%s/%s", id, offset)
-	req := request("GET", url, nil)
+	req := request(ReadBlock.Build(id, offset), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -749,8 +727,7 @@ func TestReadBlock_returns404WhenBlockDoesntExist(t *testing.T) {
 	assert.NoError(t, err)
 
 	offset := 0
-	url := fmt.Sprintf("/cat/%s/%d", id, offset)
-	req := request("GET", url, nil)
+	req := request(ReadBlock.Build(id, offset), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -769,8 +746,7 @@ func TestReadBlock_redirectsWhenBlockFound(t *testing.T) {
 	assert.NoError(t, err)
 
 	offset := 0
-	url := fmt.Sprintf("/cat/%s/%d", id, offset)
-	req := request("GET", url, nil)
+	req := request(ReadBlock.Build(id, offset), nil)
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -782,8 +758,7 @@ func TestReadBlock_redirectsWhenBlockFound(t *testing.T) {
 // Helpers
 
 func createNode(parentId string, nodeInfo graph.NodeInfo) (string, error) {
-	url := fmt.Sprintf("/cr/%s", parentId)
-	req := request("POST", url, encode(nodeInfo))
+	req := request(CreateNode.Build(parentId), encode(nodeInfo))
 	if resp, err := client.Do(req); err != nil {
 		return "", err
 	} else if resp.StatusCode != http.StatusCreated {
@@ -805,28 +780,13 @@ func createNodeWithSize(parentId string, nodeInfo graph.NodeInfo, size int) (str
 	if id, err := createNode(parentId, nodeInfo); err != nil {
 		return "", err
 	} else {
-		uploadBlock := func(size, offset int) error {
-			url := fmt.Sprintf("/dd/%s/%d", id, offset)
-			hash, dat := fileData(graph.MEGABYTE)
-			req := request("POST", url, dat)
-			req.Header.Add("Content-Hash", hash)
-
-			if resp, err := client.Do(req); err != nil {
-				return err
-			} else if resp.StatusCode != http.StatusCreated {
-				return errors.New(msg(resp))
-			}
-
-			return nil
-		}
-
 		var err error
 		for i := 0; i < size && err == nil; i += graph.BLOCK_SIZE {
 			uploadSize := graph.BLOCK_SIZE
 			if size-i < graph.BLOCK_SIZE {
 				uploadSize = size - i
 			}
-			err = uploadBlock(uploadSize, i)
+			_, err = writeBlock(uploadSize, i, id)
 		}
 
 		return id, err
@@ -836,8 +796,7 @@ func createNodeWithSize(parentId string, nodeInfo graph.NodeInfo, size int) (str
 func writeBlock(size, offset int, id string) (string, error) {
 	hash, data := fileData(size)
 
-	url := fmt.Sprintf("/dd/%s/%d", id, offset)
-	req := request("POST", url, data)
+	req := request(WriteBlock.Build(id, offset), data)
 	req.Header.Add("Content-Hash", hash)
 	if resp, err := client.Do(req); err != nil {
 		return "", err
@@ -870,8 +829,8 @@ func Test_createNode(t *testing.T) {
 	assert.True(t, node.MTime().Sub(time.Now()) < time.Second)
 }
 
-func request(method, path string, body io.Reader) *http.Request {
-	req, _ := http.NewRequest(method, endpointFmt(path), body)
+func request(endpoint Endpoint, body io.Reader) *http.Request {
+	req, _ := http.NewRequest(endpoint.Verb, endpointFmt(endpoint.String()), body)
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

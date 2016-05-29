@@ -3,157 +3,63 @@ package apiclient
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 
 	"github.com/sdcoffey/olympus/graph"
+	"github.com/sdcoffey/olympus/server/api"
 )
 
 type OlympusClient interface {
 	ListNodes(parentId string) ([]graph.NodeInfo, error)
-	MoveNode(nodeid, newParentId, newName string) error
+	ListBlocks(nodeId string) ([]graph.BlockInfo, error)
+	WriteBlock(nodeId string, offset int64, hash string, data io.Reader) error
 	RemoveNode(nodeId string) error
 	CreateNode(info graph.NodeInfo) (graph.NodeInfo, error)
 	UpdateNode(info graph.NodeInfo) error
-	HasBlocks(nodeId string, blocks []string) ([]string, error)
-	SendBlock(nodeId string, offset int64, hash string, data io.Reader) error
+	ReadBlock(nodeId string, offset int64) (io.Reader, error)
 }
 
 type ApiClient struct {
-	Address string
-}
-
-func (client ApiClient) url(method string) string {
-	return fmt.Sprint(client.Address, "/v1/", method)
+	Address  string
+	Encoding api.Encoding
 }
 
 func (client ApiClient) ListNodes(parentId string) ([]graph.NodeInfo, error) {
-	url := client.url(fmt.Sprintf("ls/%s", parentId))
-	if request, err := http.NewRequest("GET", url, nil); err != nil {
+	if request, err := client.request(api.ListNodes, parentId); err != nil {
 		return make([]graph.NodeInfo, 0), err
 	} else {
-		request.Header.Add("Accept", "application/gob")
-		if resp, err := client.do(request); err != nil {
+		var infos []graph.NodeInfo
+		if err := client.do(request, nil, &infos); err != nil {
 			return make([]graph.NodeInfo, 0), err
-		} else {
-			defer resp.Body.Close()
-			var infos []graph.NodeInfo
-			decoder := gob.NewDecoder(resp.Body)
-			err = decoder.Decode(&infos)
-
-			return infos, err
 		}
+		return infos, nil
 	}
 }
 
-func (client ApiClient) MoveNode(nodeId, newParentId, newName string) error {
-	url := client.url(fmt.Sprintf("mv/%s/%s", nodeId, newParentId))
-	if request, err := http.NewRequest("PATCH", url, nil); err != nil {
-		return err
+func (client ApiClient) ListBlocks(nodeId string) ([]graph.BlockInfo, error) {
+	if request, err := client.request(api.ListBlocks, nodeId); err != nil {
+		return make([]graph.BlockInfo, 0), err
 	} else {
-		if newName != "" {
-			request.URL.Query().Add("rename", newName)
+		var infos []graph.BlockInfo
+		if err := client.do(request, nil, &infos); err != nil {
+			return make([]graph.BlockInfo, 0), err
 		}
-
-		if _, err := client.do(request); err != nil {
-			return err
-		} else {
-			return nil
-		}
+		return infos, nil
 	}
 }
 
-func (client ApiClient) RemoveNode(nodeId string) error {
-	url := client.url(fmt.Sprintf("rm/%s", nodeId))
-	if request, err := http.NewRequest("DELETE", url, nil); err != nil {
-		return err
-	} else if _, err := client.do(request); err != nil {
-		return err
-	} else {
-		return nil
-	}
-}
-
-func (client ApiClient) CreateNode(info graph.NodeInfo) (graph.NodeInfo, error) {
-	url := client.url(fmt.Sprintf("cr/%s", info.ParentId))
-	body := new(bytes.Buffer)
-	encoder := gob.NewEncoder(body)
-	if err := encoder.Encode(info); err != nil {
-		return graph.NodeInfo{}, err
-	} else if request, err := http.NewRequest("POST", url, body); err != nil {
-		return graph.NodeInfo{}, err
-	} else {
-		request.Header.Add("Accept", "application/gob")
-		request.Header.Add("Content-Type", "application/gob")
-		if resp, err := client.do(request); err != nil {
-			return graph.NodeInfo{}, err
-		} else {
-			defer resp.Body.Close()
-			var fi graph.NodeInfo
-			decoder := gob.NewDecoder(resp.Body)
-			if err = decoder.Decode(&fi); err != nil {
-				return graph.NodeInfo{}, err
-			} else {
-				return fi, nil
-			}
-		}
-	}
-}
-
-func (client ApiClient) UpdateNode(nodeInfo graph.NodeInfo) error {
-	url := client.url(fmt.Sprintf("update/%s", nodeInfo.Id))
-	body := new(bytes.Buffer)
-	encoder := gob.NewEncoder(body)
-	if err := encoder.Encode(nodeInfo); err != nil {
-		return err
-	} else if request, err := http.NewRequest("PATCH", url, body); err != nil {
-		return err
-	} else {
-		request.Header.Add("Content-Type", "application/gob")
-		if _, err := client.do(request); err != nil {
-			return err
-		}
-
-		return nil
-	}
-}
-
-func (client ApiClient) HasBlocks(nodeId string, blocks []string) ([]string, error) {
-	url := client.url(fmt.Sprintf("hasBlocks/%s", nodeId))
-	hashList := strings.Join(blocks, ",")
-
-	if request, err := http.NewRequest("GET", url, nil); err != nil {
-		return []string{}, err
-	} else {
-		request.Header.Add("Accept", "application/gob")
-		request.URL.Query().Add("blocks", hashList)
-
-		if resp, err := client.do(request); err != nil {
-			return []string{}, err
-		} else {
-			defer resp.Body.Close()
-			var neededHashes []string
-			decoder := gob.NewDecoder(resp.Body)
-			if err = decoder.Decode(&neededHashes); err != nil {
-				return neededHashes, err
-			} else {
-				return neededHashes, nil
-			}
-		}
-	}
-}
-
-func (client ApiClient) SendBlock(nodeId string, offset int64, hash string, data io.Reader) error {
-	url := client.url(fmt.Sprintf("dd/%s/%d", nodeId, offset))
-	if request, err := http.NewRequest("POST", url, data); err != nil {
+func (client ApiClient) WriteBlock(nodeId string, offset int64, hash string, data io.Reader) error {
+	if request, err := client.request(api.WriteBlock, nodeId, offset); err != nil {
 		return err
 	} else {
 		request.Header.Add("Content-Hash", hash)
-		if _, err := client.do(request); err != nil {
+		if err := client.do(request, data, nil); err != nil {
 			return err
 		}
 	}
@@ -161,21 +67,126 @@ func (client ApiClient) SendBlock(nodeId string, offset int64, hash string, data
 	return nil
 }
 
-func (client ApiClient) do(req *http.Request) (*http.Response, error) {
-	if resp, err := http.DefaultClient.Do(req); err != nil {
-		return resp, err
-	} else if client.errorFromResponse(resp); err != nil {
-		return nil, err
+func (client ApiClient) RemoveNode(nodeId string) error {
+	if request, err := client.request(api.RemoveNode, nodeId); err != nil {
+		return err
+	} else if err := client.do(request, nil, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (client ApiClient) CreateNode(info graph.NodeInfo) (graph.NodeInfo, error) {
+	if request, err := client.request(api.CreateNode, info.ParentId); err != nil {
+		return graph.NodeInfo{}, err
 	} else {
-		return resp, nil
+		var returnInfo graph.NodeInfo
+		if err := client.do(request, info, &returnInfo); err != nil {
+			return graph.NodeInfo{}, err
+		}
+
+		return returnInfo, nil
 	}
 }
 
+func (client ApiClient) UpdateNode(nodeInfo graph.NodeInfo) error {
+	if request, err := client.request(api.UpdateNode, nodeInfo.Id); err != nil {
+		return err
+	} else {
+		if err := client.do(request, nodeInfo, nil); err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func (client ApiClient) ReadBlock(nodeId string, offset int64) (io.Reader, error) {
+	var resp []byte
+	if request, err := client.request(api.ReadBlock, nodeId, offset); err != nil {
+		return nil, err
+	} else if err := client.do(request, nil, &resp); err != nil {
+		return nil, err
+	} else {
+		return bytes.NewBuffer(resp), nil
+	}
+}
+
+func (client ApiClient) request(endpoint api.Endpoint, args ...interface{}) (*http.Request, error) {
+	path := endpoint.Build(args...).String()
+	if req, err := http.NewRequest(endpoint.Verb, client.url(path), nil); err != nil {
+		return nil, err
+	} else {
+		req.Header.Add("Accept", string(client.Encoding))
+		if endpoint.Verb == "POST" || endpoint.Verb == "PATCH" || endpoint.Verb == "PUT" {
+			req.Header.Add("Content-Type", string(client.Encoding))
+		}
+		return req, nil
+	}
+}
+
+func (client ApiClient) do(req *http.Request, body interface{}, responseBody interface{}) error {
+	var buf *bytes.Buffer
+	if body != nil {
+		switch body.(type) {
+		case io.Reader:
+			req.Body = ioutil.NopCloser(body.(io.Reader))
+		default:
+			buf = new(bytes.Buffer)
+			encoder := client.encoder(buf)
+			if err := encoder.Encode(body); err != nil {
+				return err
+			}
+			req.Body = ioutil.NopCloser(buf)
+		}
+	}
+
+	if resp, err := http.DefaultClient.Do(req); err != nil {
+		return err
+	} else if err = client.errorFromResponse(resp); err != nil {
+		return err
+	} else {
+		if responseBody != nil {
+			defer resp.Body.Close()
+			decoder := client.decoder(resp.Body)
+			return decoder.Decode(responseBody)
+		}
+		return nil
+	}
+}
+
+func (client ApiClient) url(path string) string {
+	return fmt.Sprint(client.Address, "/v1", path)
+}
+
 func (client ApiClient) errorFromResponse(resp *http.Response) error {
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode >= http.StatusBadRequest {
 		defer resp.Body.Close()
 		errorMessage, _ := ioutil.ReadAll(resp.Body)
 		return errors.New(string(errorMessage))
 	}
 	return nil
+}
+
+func (client ApiClient) encoder(wr io.Writer) api.Encoder {
+	switch client.Encoding {
+	case api.GobEncoding:
+		return gob.NewEncoder(wr)
+	case api.XmlEncoding:
+		return xml.NewEncoder(wr)
+	default:
+		return json.NewEncoder(wr)
+	}
+}
+
+func (client ApiClient) decoder(rd io.Reader) api.Decoder {
+	switch client.Encoding {
+	case api.GobEncoding:
+		return gob.NewDecoder(rd)
+	case api.XmlEncoding:
+		return xml.NewDecoder(rd)
+	default:
+		return json.NewDecoder(rd)
+	}
 }

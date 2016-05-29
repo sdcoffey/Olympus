@@ -60,11 +60,12 @@ func (manager *Manager) RemoveNode(nodeId string) error {
 }
 
 func (manager *Manager) MoveNode(nodeId, newParentId, newName string) error {
-	if err := manager.api.MoveNode(nodeId, newParentId, newName); err != nil {
-		return err
+	nodeInfo := graph.NodeInfo{
+		Id:       nodeId,
+		ParentId: newParentId,
+		Name:     newName,
 	}
-
-	return nil
+	return manager.api.UpdateNode(nodeInfo)
 }
 
 type ProgressCallback func(total, current int64)
@@ -113,7 +114,7 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 
 						rd := bytes.NewBuffer(h.data)
 						hash := graph.Hash(h.data)
-						if err = manager.api.SendBlock(newNode.Id, h.offset, hash, rd); err != nil {
+						if err = manager.api.WriteBlock(newNode.Id, h.offset, hash, rd); err != nil {
 							errChan <- err
 						}
 						uploadedBytes += payloadSize
