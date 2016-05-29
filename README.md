@@ -35,7 +35,7 @@ $ olympus-cli # To run the client
 
 Data and config files are, by default, stored in a the current users's home directory under `.olympus/`. To specify an alternative location, set the environment variable `OLYMPUS_HOME` to another path before installing.
 
-## Coming Soon
+## `// TODO:`
  - Mobile and Web clients
  - Desktop agent
  - HTTP/2 Support
