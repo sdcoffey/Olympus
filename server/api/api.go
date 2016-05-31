@@ -195,7 +195,7 @@ func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Reque
 
 		newNode := restApi.graph.NodeWithNodeInfo(nodeInfo)
 		newNode.Id = uuid.New()
-		if err := newNode.Save(); err != nil {
+		if err := newNode.save(); err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)

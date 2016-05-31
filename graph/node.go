@@ -8,15 +8,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley/graph"
+	"github.com/sdcoffey/olympus/util"
 )
 
 const (
 	parentLink = "hasParent"
 	nameLink   = "isNamed"
-	modeLink   = "modeLink"
+	modeLink   = "hasMode"
 	mTimeLink  = "hasMTime"
 	typeLink   = "hasType"
 
@@ -36,15 +36,6 @@ type Node struct {
 	mTime    time.Time
 	mode     os.FileMode
 	mimeType string
-}
-
-func newNode(name string, graph *NodeGraph) *Node {
-	file := new(Node)
-	file.Id = uuid.New()
-	file.mTime = time.Now()
-	file.name = name
-	file.graph = graph
-	return file
 }
 
 func (nd *Node) Name() string {
@@ -108,6 +99,8 @@ func (nd *Node) Children() []*Node {
 		child.parentId = nd.Id
 		children = append(children, child)
 	}
+
+	Sort(children, Alphabetical)
 
 	return children
 }
@@ -175,12 +168,9 @@ func (nd *Node) WriteData(data []byte, offset int64) error {
 	return nil
 }
 
-func (nd *Node) Save() (err error) {
+func (nd *Node) save() (err error) {
 	if nd.name == "" && nd.Name() == "" {
 		return errors.New("Cannot add nameless file")
-	} else if nd.mTime.After(time.Now()) {
-		nd.mTime = time.Time{}
-		return errors.New("Cannot set futuristic mTime")
 	} else if nd.Parent() == nil && nd.parentId == "" && nd.Id != RootNodeId {
 		return errors.New("Cannot add file without parent")
 	}
@@ -238,14 +228,64 @@ func (nd *Node) Save() (err error) {
 	return nil
 }
 
+func (nd *Node) checkLineage(maybeParentId string) bool {
+	parent := nd.Parent()
+	for parent != nil {
+		if parent.Id == maybeParentId {
+			return true
+		}
+		parent = parent.Parent()
+	}
+
+	return false
+}
+
+func (nd *Node) Move(newParentId string) error {
+	if nd.Parent() == nil {
+		return errors.New("Cannot move root node")
+	} else if newParentId == nd.Id {
+		return errors.New("Cannot move node inside itself")
+	}
+
+	newParent := nd.graph.NodeWithId(newParentId)
+	if newParent.checkLineage(nd.Id) {
+		return errors.New("Cannot move node inside itself")
+	}
+
+	if err := nd.graph.addNode(newParent, nd); err != nil {
+		nd.parentId = ""
+		return err
+	}
+
+	return nil
+}
+
+func (nd *Node) Rename(newName string) error {
+	if nd.Name() == newName {
+		return nil
+	}
+
+	nd.name = newName
+	nd.mimeType = util.MimeType(nd.name)
+	return nd.save()
+}
+
 func (nd *Node) Chmod(newMode os.FileMode) error {
+	if nd.Size() > 0 && newMode.IsDir() {
+		return errors.New("File has size, cannot change to directory")
+	}
 	nd.mode = newMode
-	return nd.Save()
+	return nd.save()
 }
 
 func (nd *Node) Touch(mTime time.Time) error {
+	if mTime.After(time.Now()) {
+		nd.mTime = time.Time{}
+		return errors.New("Cannot set modified time in the future")
+	}
+
 	nd.mTime = mTime
-	return nd.Save()
+	return nd.save()
 }
 
 func (nd *Node) Exists() bool {
@@ -255,7 +295,7 @@ func (nd *Node) Exists() bool {
 func (nd *Node) NodeInfo() NodeInfo {
 	info := NodeInfo{
 		Id:    nd.Id,
-		Mode:  uint32(nd.Mode()),
+		Mode:  nd.Mode(),
 		MTime: nd.MTime(),
 		Name:  nd.Name(),
 		Size:  nd.Size(),

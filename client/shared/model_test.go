@@ -2,103 +2,108 @@ package shared
 
 import (
 	"fmt"
+	"net/http/httptest"
+	"os"
 	"testing"
 
-	"net/http/httptest"
-
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/server/api"
+	. "gopkg.in/check.v1"
 )
 
-func TestModel_returnsErrIfRootDoestNotExist(t *testing.T) {
-	client, ng := setup()
-
-	rootNode := ng.NodeWithId("not-an-id")
-	model := newModel(client, rootNode, ng)
-
-	assert.EqualError(t, model.init(), "Root with id: not-an-id does not exist")
+func init() {
+	Suite(&ModelTestSuite{})
 }
 
-func TestModel_doesNotReturnErrorIfRootExists(t *testing.T) {
-	client, ng := setup()
-
-	model := newModel(client, ng.RootNode, ng)
-	assert.NoError(t, model.init())
+type ModelTestSuite struct {
+	client    apiclient.ApiClient
+	nodeGraph *graph.NodeGraph
+	server    *httptest.Server
+	tmpDir    string
 }
 
-func TestModel_initRefreshesCache(t *testing.T) {
-	client, ng := setup()
+func Test(t *testing.T) {
+	TestingT(t)
+}
 
-	model := newModel(client, ng.RootNode, ng)
+func (t *ModelTestSuite) SetUpTest(c *C) {
+	t.nodeGraph, t.tmpDir = graph.TestInit()
+	t.server = httptest.NewServer(api.NewApi(t.nodeGraph))
+	t.client = apiclient.ApiClient{t.server.URL, api.JsonEncoding}
+}
+
+func (t *ModelTestSuite) TearDownTest(c *C) {
+	t.server.Close()
+	os.Remove(t.tmpDir)
+}
+
+func (t *ModelTestSuite) TestModel_Init_returnsErrIfRootDoestNotExist(c *C) {
+	rootNode := t.nodeGraph.NodeWithId("not-an-id")
+	model := newModel(t.client, rootNode, t.nodeGraph)
+
+	c.Check(model.init(), ErrorMatches, "Root with id: not-an-id does not exist")
+}
+
+func (t *ModelTestSuite) TestModel_Init_doesNotReturnErrorIfRootExists(c *C) {
+	model := newModel(t.client, t.nodeGraph.RootNode, t.nodeGraph)
+	c.Check(model.init(), IsNil)
+}
+
+func (t *ModelTestSuite) TestModel_initRefreshesCache(c *C) {
+	model := newModel(t.client, t.nodeGraph.RootNode, t.nodeGraph)
 
 	for i := 0; i < 3; i++ {
-		_, err := client.CreateNode(graph.NodeInfo{
+		_, err := t.client.CreateNode(graph.NodeInfo{
 			ParentId: graph.RootNodeId,
 			Name:     fmt.Sprint(i),
 		})
-		assert.NoError(t, err)
+		c.Check(err, IsNil)
 	}
 
 	err := model.init()
-	assert.NoError(t, err)
-
-	assert.EqualValues(t, 3, len(model.Root.Children()))
+	c.Check(err, IsNil)
+	c.Check(3, Equals, len(model.Root.Children()))
 }
 
-func TestModel_refreshRemovesLocalItemsDeletedRemotely(t *testing.T) {
-	client, ng := setup()
-
-	model := newModel(client, ng.RootNode, ng)
+func (t *ModelTestSuite) TestModel_Refresh_RemovesLocalItemsDeletedRemotely(c *C) {
+	model := newModel(t.client, t.nodeGraph.RootNode, t.nodeGraph)
 
 	for i := 0; i < 3; i++ {
-		_, err := client.CreateNode(graph.NodeInfo{
+		_, err := t.client.CreateNode(graph.NodeInfo{
 			ParentId: graph.RootNodeId,
 			Name:     fmt.Sprint(i),
 		})
-		assert.NoError(t, err)
+		c.Check(err, IsNil)
 	}
 
-	assert.NoError(t, model.init())
+	err := model.init()
+	c.Check(err, IsNil)
+	c.Check(3, Equals, len(model.Root.Children()))
 
-	assert.EqualValues(t, 3, len(model.Root.Children()))
+	children := model.graph.NodeWithId(t.nodeGraph.RootNode.Id).Children()
+	err = t.client.RemoveNode(children[0].Id)
+	c.Check(err, IsNil)
 
-	children := model.graph.NodeWithId(ng.RootNode.Id).Children()
-	assert.NoError(t, client.RemoveNode(children[0].Id))
-
-	assert.NoError(t, model.Refresh())
-	assert.EqualValues(t, 2, len(model.Root.Children()))
+	err = model.Refresh()
+	c.Check(err, IsNil)
+	c.Check(2, Equals, len(model.Root.Children()))
 }
 
-func TestModel_findNodeByNameReturnsCorrectNode(t *testing.T) {
-	client, ng := setup()
-
-	model := newModel(client, ng.RootNode, ng)
+func (t *ModelTestSuite) TestModel_FindNodeByName_ReturnsCorrectNode(c *C) {
+	model := newModel(t.client, t.nodeGraph.RootNode, t.nodeGraph)
 
 	for i := 0; i < 3; i++ {
-		_, err := client.CreateNode(graph.NodeInfo{
+		_, err := t.client.CreateNode(graph.NodeInfo{
 			ParentId: graph.RootNodeId,
 			Name:     fmt.Sprint(i),
 		})
-		assert.NoError(t, err)
+		c.Check(err, IsNil)
 	}
 
-	assert.NoError(t, model.init())
+	err := model.init()
+	c.Check(err, IsNil)
 
 	node := model.FindNodeByName("1")
-	assert.Equal(t, ng.RootNode.Id, node.Parent().Id)
-	assert.EqualValues(t, 0, node.Size())
-}
-
-var (
-	server *httptest.Server
-)
-
-func setup() (apiclient.ApiClient, *graph.NodeGraph) {
-	graph := graph.TestInit()
-	server = httptest.NewServer(api.NewApi(graph))
-	client := apiclient.ApiClient{server.URL, api.JsonEncoding}
-
-	return client, graph
+	c.Check(node.Parent().Id, Equals, t.nodeGraph.RootNode.Id)
 }

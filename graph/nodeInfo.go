@@ -1,6 +1,9 @@
 package graph
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 type NodeInfo struct {
 	Id       string
@@ -8,7 +11,7 @@ type NodeInfo struct {
 	Name     string
 	Size     int64
 	MTime    time.Time
-	Mode     uint32
+	Mode     os.FileMode
 	Type     string
 }
 

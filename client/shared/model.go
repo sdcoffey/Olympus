@@ -47,7 +47,7 @@ func (model *Model) Refresh() error {
 		for i := 0; i < len(nodeInfos) && err == nil; i++ {
 			nodeInfo := nodeInfos[i]
 			node := model.graph.NodeWithNodeInfo(nodeInfo)
-			if err = node.Save(); err != nil {
+			if err = node.save(); err != nil {
 				return fmt.Errorf("Error refreshing model: %s", err.Error())
 			}
 			if _, ok := nodeSet[nodeInfo.Id]; ok {

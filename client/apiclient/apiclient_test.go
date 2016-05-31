@@ -93,7 +93,7 @@ func TestApiClient_ListBlocks_listsBlocks(t *testing.T) {
 		Name:     "thing.txt",
 		Mode:     0755,
 	})
-	assert.NoError(t, node.Save())
+	assert.NoError(t, node.save())
 
 	dat1 := graph.RandDat(graph.MEGABYTE)
 	hash1 := graph.Hash(dat1)
@@ -122,7 +122,7 @@ func TestApiClient_WriteBlock_writesBlock(t *testing.T) {
 		Name:     "thing.txt",
 		Mode:     0755,
 	})
-	assert.NoError(t, node.Save())
+	assert.NoError(t, node.save())
 
 	dat := graph.RandDat(graph.MEGABYTE)
 	buf := bytes.NewBuffer(dat)
@@ -146,7 +146,7 @@ func TestApiClient_RemoveNode_removesNode(t *testing.T) {
 		Name:     "thing.txt",
 		Mode:     0755,
 	})
-	assert.NoError(t, node.Save())
+	assert.NoError(t, node.save())
 
 	err := client.RemoveNode(node.Id)
 	assert.NoError(t, err)
@@ -182,7 +182,7 @@ func TestApiClient_UpdateNode_updatesNode(t *testing.T) {
 		Name:     "thing.txt",
 		Mode:     0755,
 	})
-	assert.NoError(t, node.Save())
+	assert.NoError(t, node.save())
 
 	info := node.NodeInfo()
 	info.Mode = 700

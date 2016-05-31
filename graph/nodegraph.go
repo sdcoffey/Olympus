@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/pborman/uuid"
 	"github.com/sdcoffey/olympus/util"
 )
 
@@ -20,19 +21,47 @@ type NodeGraph struct {
 func NewGraph(graph *cayley.Handle) (*NodeGraph, error) {
 	ng := &NodeGraph{graph, nil}
 
-	root := newNode("root", ng)
+	root := new(Node)
+	root.name = "root"
 	root.Id = RootNodeId
 	root.mode |= os.ModeDir
+	root.graph = ng
 
 	ng.RootNode = root
 
-	if err := root.Save(); err != nil {
+	if err := root.save(); err != nil {
 		return nil, err
 	} else {
 		ng.RootNode = root
 	}
 
 	return ng, nil
+}
+
+func (ng *NodeGraph) NewNode(name, parentId string) (*Node, error) {
+	node := new(Node)
+	node.parentId = parentId
+	node.Id = uuid.New()
+	node.mTime = time.Now()
+	node.name = name
+	node.graph = ng
+
+	node.mimeType = util.MimeType(name)
+
+	return node, ng.addNode(ng.NodeWithId(parentId), node)
+}
+
+func (ng *NodeGraph) NewNodeWithNodeInfo(info NodeInfo) (*Node, error) {
+	node := ng.NodeWithNodeInfo(info)
+	node.Id = uuid.New()
+
+	if info.Type != "" {
+		node.mimeType = info.Type
+	} else {
+		node.mimeType = util.MimeType(info.Name)
+	}
+
+	return node, ng.addNode(ng.NodeWithId(info.ParentId), node)
 }
 
 func (ng *NodeGraph) NodeWithId(id string) *Node {
@@ -58,6 +87,7 @@ func (ng *NodeGraph) NodeWithNodeInfo(info NodeInfo) *Node {
 	node.mTime = info.MTime
 	node.parentId = info.ParentId
 	node.mimeType = info.Type
+	node.graph = ng
 
 	return node
 }
@@ -77,50 +107,26 @@ func (ng *NodeGraph) RemoveNode(nd *Node) (err error) {
 	return ng.removeNode(nd)
 }
 
-func (ng *NodeGraph) CreateDirectory(parent *Node, name string) (child *Node, err error) {
-	child = newNode(name, ng)
-	child.mode |= os.ModeDir
+func (ng *NodeGraph) CreateDirectory(parentId, name string) (*Node, error) {
+	var info NodeInfo
+	info.ParentId = parentId
+	info.Mode = os.ModeDir
+	info.Name = name
 
-	if err = ng.addNode(parent, child); err != nil {
-		return
-	}
-	return
-}
-
-func (ng *NodeGraph) MoveNode(nd *Node, newName, newParentId string) (err error) {
-	if nd.Parent() == nil {
-		return errors.New("Cannot move root node")
-	} else if newParentId == nd.Id {
-		return errors.New("Cannot move node inside itself")
-	} else if newParentId == nd.Parent().Id && newName == nd.Name() {
-		return nil
-	}
-
-	if nd.Name() != newName {
-		nd.name = newName
-		nd.mimeType = util.MimeType(nd.name)
-	}
-
-	newParent := ng.NodeWithId(newParentId)
-	if err = ng.addNode(newParent, nd); err != nil {
-		nd.name = ""
-		return
-	}
-
-	return nil
+	return ng.NewNodeWithNodeInfo(info)
 }
 
 func (ng *NodeGraph) addNode(parent, child *Node) error {
-	if !parent.IsDir() {
+	if parent == nil || !parent.Exists() {
+		return fmt.Errorf("Parent %s does not exist", parent.Id)
+	} else if !parent.IsDir() {
 		return errors.New("Cannot add node to a non-directory")
 	} else if parent.Exists() && ng.NodeWithName(parent.Id, child.name) != nil {
-		return errors.New(fmt.Sprintf("Node with name %s already exists in %s", child.name, parent.Name()))
-	} else if !parent.Exists() {
-		return errors.New(fmt.Sprint("Parent ", parent.Name(), " does not exist"))
+		return fmt.Errorf("Node with name %s already exists in %s", child.name, parent.Name())
 	}
 
 	child.parentId = parent.Id
-	return child.Save()
+	return child.save()
 }
 
 func (ng *NodeGraph) removeNode(nd *Node) (err error) {
