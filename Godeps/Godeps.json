@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/sdcoffey/olympus",
-	"GoVersion": "go1.5",
+	"GoVersion": "go1.6",
 	"Packages": [
 		"./..."
 	],
@@ -54,6 +54,10 @@
 		{
 			"ImportPath": "github.com/wsxiaoys/terminal/color",
 			"Rev": "9dcaf1d63119a8ac00eef82270eaef08b6aa2328"
+		},
+		{
+			"ImportPath": "gopkg.in/check.v1",
+			"Rev": "4f90aeace3a26ad7021961c297b22c42160c7b25"
 		},
 		{
 			"ImportPath": "gopkg.in/cheggaaa/pb.v1",

@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
+	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
-	. "gopkg.in/check.v1"
 )
 
 func init() {

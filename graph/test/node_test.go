@@ -7,8 +7,8 @@ import (
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
-	. "gopkg.in/check.v1"
 )
 
 func (suite *GraphTestSuite) TestNode_NodeInfo(t *C) {

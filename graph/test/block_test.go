@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
-	. "gopkg.in/check.v1"
 )
 
 func TestMain(m *testing.M) {
