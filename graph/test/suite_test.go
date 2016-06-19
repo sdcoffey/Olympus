@@ -1,13 +1,16 @@
 package graph
 
 import (
-	"testing"
-
 	"os"
+	"testing"
 
 	"github.com/sdcoffey/olympus/graph"
 	. "gopkg.in/check.v1"
 )
+
+func init() {
+	Suite(&GraphTestSuite{})
+}
 
 type GraphTestSuite struct {
 	ng      *graph.NodeGraph
@@ -20,10 +23,6 @@ func (suite *GraphTestSuite) SetUpTest(t *C) {
 
 func (suite *GraphTestSuite) TearDownTest(t *C) {
 	os.Remove(suite.testDir)
-}
-
-func init() {
-	Suite(&GraphTestSuite{})
 }
 
 func TestNodeSuite(t *testing.T) {
