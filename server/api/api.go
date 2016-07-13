@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -222,35 +221,8 @@ func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	changes := []func() error{
-		func() error {
-			if nodeInfo.ParentId != "" && nodeInfo.ParentId != node.Parent().Id {
-				return node.Move(nodeInfo.ParentId)
-			}
-			return nil
-		},
-		func() error {
-			if node.Mode() != os.FileMode(nodeInfo.Mode) {
-				return node.Chmod(os.FileMode(nodeInfo.Mode))
-			}
-			return nil
-		},
-		func() error {
-			if node.Name() != nodeInfo.Name {
-				return node.Rename(nodeInfo.Name)
-			}
-			return nil
-		},
-		func() error {
-			return node.Touch(nodeInfo.MTime)
-		},
-	}
-
-	for i := 0; i < len(changes) && err == nil; i++ {
-		err = changes[i]()
-	}
-
-	if err != nil {
+	if err = node.Update(nodeInfo); err != nil {
+		fmt.Println(err.Error())
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 	} else {
 		writer.WriteHeader(http.StatusOK)

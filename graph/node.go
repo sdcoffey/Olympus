@@ -245,6 +245,8 @@ func (nd *Node) Move(newParentId string) error {
 		return errors.New("Cannot move root node")
 	} else if newParentId == nd.Id {
 		return errors.New("Cannot move node inside itself")
+	} else if newParentId == "" {
+		return nil
 	}
 
 	newParent := nd.graph.NodeWithId(newParentId)
@@ -252,7 +254,7 @@ func (nd *Node) Move(newParentId string) error {
 		return errors.New("Cannot move node inside itself")
 	}
 
-	if err := nd.graph.addNode(newParent, nd); err != nil {
+	if err := nd.graph.AddNode(newParent, nd); err != nil {
 		nd.parentId = ""
 		return err
 	}
@@ -286,6 +288,41 @@ func (nd *Node) Touch(mTime time.Time) error {
 
 	nd.mTime = mTime
 	return nd.save()
+}
+
+func (nd *Node) Update(info NodeInfo) error {
+	updates := []func() error{
+		func() error {
+			if info.Name != nd.Name() {
+				return nd.Rename(info.Name)
+			}
+			return nil
+		},
+		func() error {
+			if nd.Parent() != nil && info.ParentId != nd.Parent().Id {
+				return nd.Move(info.ParentId)
+			}
+			return nil
+		},
+		func() error {
+			if info.Mode != nd.Mode() {
+				return nd.Chmod(info.Mode)
+			}
+			return nil
+		},
+		func() error {
+			if info.MTime != nd.MTime() {
+				return nd.Touch(info.MTime)
+			}
+			return nil
+		},
+	}
+
+	var err error
+	for i := 0; i < len(updates) && err == nil; i++ {
+		err = updates[i]()
+	}
+	return err
 }
 
 func (nd *Node) Exists() bool {

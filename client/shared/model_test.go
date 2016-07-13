@@ -6,9 +6,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/graph"
+	"github.com/sdcoffey/olympus/graph/testutils"
 	"github.com/sdcoffey/olympus/server/api"
 )
 
@@ -23,18 +25,20 @@ type ModelTestSuite struct {
 	tmpDir    string
 }
 
-func Test(t *testing.T) {
+func TestModelTestSuite(t *testing.T) {
 	TestingT(t)
 }
 
 func (t *ModelTestSuite) SetUpTest(c *C) {
-	t.nodeGraph, t.tmpDir = graph.TestInit()
-	t.server = httptest.NewServer(api.NewApi(t.nodeGraph))
+	memGraph, _ := cayley.NewMemoryGraph()
+	memNg, _ := graph.NewGraph(memGraph)
+
+	t.nodeGraph, t.tmpDir = testutils.TestInit()
+	t.server = httptest.NewServer(api.NewApi(memNg))
 	t.client = apiclient.ApiClient{t.server.URL, api.JsonEncoding}
 }
 
 func (t *ModelTestSuite) TearDownTest(c *C) {
-	t.server.Close()
 	os.Remove(t.tmpDir)
 }
 
@@ -80,8 +84,7 @@ func (t *ModelTestSuite) TestModel_Refresh_RemovesLocalItemsDeletedRemotely(c *C
 	err := model.init()
 	c.Check(err, IsNil)
 	c.Check(3, Equals, len(model.Root.Children()))
-
-	children := model.graph.NodeWithId(t.nodeGraph.RootNode.Id).Children()
+	children := model.graph.NodeWithId(graph.RootNodeId).Children()
 	err = t.client.RemoveNode(children[0].Id)
 	c.Check(err, IsNil)
 

@@ -55,12 +55,6 @@ func TestApiClient_request_setsCorrectHeaders(t *testing.T) {
 	assert.Equal(t, string(api.JsonEncoding), request.Header.Get("Content-Type"))
 }
 
-func TestApiClient_do_readsErrorFROmBodyOnNonOkStatus(t *testing.T) {
-	client := ApiClient{"http://localhost", api.JsonEncoding}
-	_, err := client.ListNodes("not-found")
-	assert.Contains(t, err.Error(), "Node with id: not-found does not exist")
-}
-
 func TestApiCLient_request_buildsCorrectUrl(t *testing.T) {
 	address := "http://localhost"
 	client := ApiClient{address, api.JsonEncoding}

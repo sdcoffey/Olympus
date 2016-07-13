@@ -129,3 +129,8 @@ func (suite *ApiClientTestSuite) TestApiClient_UpdateNode_updatesNode(t *C) {
 	assert.Equal(t, "file.dat", node.Name())
 	assert.EqualValues(t, 700, int(node.Mode()))
 }
+
+func (suite *ApiClientTestSuite) TestApiClient_do_readsErrorFromBodyOnNonOkStatus(t *C) {
+	_, err := suite.client.ListNodes("not-found")
+	assert.Contains(t, err.Error(), "Node with id: not-found does not exist")
+}

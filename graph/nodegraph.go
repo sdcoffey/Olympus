@@ -48,7 +48,7 @@ func (ng *NodeGraph) NewNode(name, parentId string) (*Node, error) {
 
 	node.mimeType = util.MimeType(name)
 
-	return node, ng.addNode(ng.NodeWithId(parentId), node)
+	return node, ng.AddNode(ng.NodeWithId(parentId), node)
 }
 
 func (ng *NodeGraph) NewNodeWithNodeInfo(info NodeInfo) (*Node, error) {
@@ -61,7 +61,7 @@ func (ng *NodeGraph) NewNodeWithNodeInfo(info NodeInfo) (*Node, error) {
 		node.mimeType = util.MimeType(info.Name)
 	}
 
-	return node, ng.addNode(ng.NodeWithId(info.ParentId), node)
+	return node, ng.AddNode(ng.NodeWithId(info.ParentId), node)
 }
 
 func (ng *NodeGraph) NodeWithId(id string) *Node {
@@ -116,7 +116,7 @@ func (ng *NodeGraph) CreateDirectory(parentId, name string) (*Node, error) {
 	return ng.NewNodeWithNodeInfo(info)
 }
 
-func (ng *NodeGraph) addNode(parent, child *Node) error {
+func (ng *NodeGraph) AddNode(parent, child *Node) error {
 	if parent == nil || !parent.Exists() {
 		return fmt.Errorf("Parent %s does not exist", parent.Id)
 	} else if !parent.IsDir() {

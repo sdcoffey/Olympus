@@ -45,7 +45,7 @@ func (manager *Manager) CreateDirectory(parentId string, name string) error {
 		ParentId: parentId,
 		Name:     name,
 		MTime:    time.Now(),
-		Mode:     uint32(os.ModeDir) | 700,
+		Mode:     os.ModeDir | os.FileMode(0700),
 	}
 	_, err := manager.api.CreateNode(info)
 	return err
