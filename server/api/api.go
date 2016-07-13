@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
@@ -193,9 +192,7 @@ func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Reque
 			nodeInfo.Type = util.MimeType(nodeInfo.Name)
 		}
 
-		newNode := restApi.graph.NodeWithNodeInfo(nodeInfo)
-		newNode.Id = uuid.New()
-		if err := newNode.save(); err != nil {
+		if newNode, err := restApi.graph.NewNodeWithNodeInfo(nodeInfo); err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)
@@ -227,15 +224,20 @@ func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Reque
 
 	changes := []func() error{
 		func() error {
-			newParentId := node.Parent().Id
-			if nodeInfo.ParentId != "" {
-				newParentId = nodeInfo.ParentId
+			if nodeInfo.ParentId != "" && nodeInfo.ParentId != node.Parent().Id {
+				return node.Move(nodeInfo.ParentId)
 			}
-			return restApi.graph.MoveNode(node, nodeInfo.Name, newParentId)
+			return nil
 		},
 		func() error {
 			if node.Mode() != os.FileMode(nodeInfo.Mode) {
 				return node.Chmod(os.FileMode(nodeInfo.Mode))
+			}
+			return nil
+		},
+		func() error {
+			if node.Name() != nodeInfo.Name {
+				return node.Rename(nodeInfo.Name)
 			}
 			return nil
 		},

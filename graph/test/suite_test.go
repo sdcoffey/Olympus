@@ -6,6 +6,7 @@ import (
 
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
+	"github.com/sdcoffey/olympus/graph/testutils"
 )
 
 func init() {
@@ -18,7 +19,7 @@ type GraphTestSuite struct {
 }
 
 func (suite *GraphTestSuite) SetUpTest(t *C) {
-	suite.ng, suite.testDir = TestInit()
+	suite.ng, suite.testDir = testutils.TestInit()
 }
 
 func (suite *GraphTestSuite) TearDownTest(t *C) {
