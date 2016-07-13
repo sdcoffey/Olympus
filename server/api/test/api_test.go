@@ -94,8 +94,11 @@ func (suite *ApiTestSuite) TestRmFile_returnsErrorIfFileNotExist(t *C) {
 }
 
 func (suite *ApiTestSuite) TestRmFile_removesFileSuccessfully(t *C) {
-	node, _ := suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child")
-	endpoint := api.RemoveNode.Build(node.Id)
+	nodeId, err := suite.createNode(graph.RootNodeId, graph.NodeInfo{
+		Name: "child.txt",
+		Mode: 0755,
+	})
+	endpoint := api.RemoveNode.Build(nodeId)
 	req := suite.request(endpoint, nil)
 
 	resp, err := suite.client.Do(req)
@@ -109,7 +112,6 @@ func (suite *ApiTestSuite) TestCreateNode_returnsErrorForMissingParent(t *C) {
 	ni := graph.NodeInfo{
 		Name: "Node",
 		Mode: 755,
-		Size: 1024,
 		Type: "application/text",
 	}
 

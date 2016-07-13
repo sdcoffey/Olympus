@@ -9,6 +9,7 @@ import (
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
+	"github.com/sdcoffey/olympus/graph/testutils"
 )
 
 func (suite *GraphTestSuite) TestNode_NodeInfo(t *C) {
@@ -49,8 +50,8 @@ func (suite *GraphTestSuite) TestSize(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
 	assert.NoError(t, err)
 
-	assert.NoError(t, node.WriteData(RandDat(graph.MEGABYTE), 0))
-	assert.NoError(t, node.WriteData(RandDat(1024), graph.MEGABYTE))
+	assert.NoError(t, node.WriteData(testutils.RandDat(graph.MEGABYTE), 0))
+	assert.NoError(t, node.WriteData(testutils.RandDat(1024), graph.MEGABYTE))
 
 	assert.EqualValues(t, graph.MEGABYTE+1024, node.Size())
 }
@@ -166,7 +167,7 @@ func (suite *GraphTestSuite) TestSave_returnsErrorWhenFileHasNoName(t *C) {
 
 func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
 
 	assert.NoError(t, child.WriteData(dat, 0))
@@ -180,18 +181,18 @@ func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
 
 func (suite *GraphTestSuite) TestWriteData_throwsOnInvalidBlockOffset(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 
 	assert.EqualError(t, child.WriteData(dat, 1), fmt.Sprint("1 is not a valid offset for block size ", graph.BLOCK_SIZE))
 }
 
 func (suite *GraphTestSuite) TestWriteData_removesExistingFingerprintForOffset(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 
 	assert.NoError(t, child.WriteData(dat, 0))
 
-	dat = RandDat(1024)
+	dat = testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
 	assert.NoError(t, child.WriteData(dat, 0))
 
@@ -202,12 +203,12 @@ func (suite *GraphTestSuite) TestWriteData_removesExistingFingerprintForOffset(t
 
 func (suite *GraphTestSuite) TestWriteData_SizeChanges(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	dat := RandDat(graph.BLOCK_SIZE)
+	dat := testutils.RandDat(graph.BLOCK_SIZE)
 	assert.NoError(t, child.WriteData(dat, 0))
 
 	assert.EqualValues(t, graph.MEGABYTE, child.Size())
 
-	dat = RandDat(graph.BLOCK_SIZE)
+	dat = testutils.RandDat(graph.BLOCK_SIZE)
 	assert.NoError(t, child.WriteData(dat, graph.BLOCK_SIZE))
 
 	assert.EqualValues(t, graph.MEGABYTE*2, child.Size())
@@ -215,10 +216,10 @@ func (suite *GraphTestSuite) TestWriteData_SizeChanges(t *C) {
 
 func (suite *GraphTestSuite) TestBlockWithOffset_findsCorrectBlock(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	data := RandDat(graph.MEGABYTE)
+	data := testutils.RandDat(graph.MEGABYTE)
 	assert.NoError(t, child.WriteData(data, 0))
 
-	data2 := RandDat(graph.MEGABYTE)
+	data2 := testutils.RandDat(graph.MEGABYTE)
 	assert.NoError(t, child.WriteData(data2, graph.MEGABYTE))
 
 	foundBlock := child.BlockWithOffset(0)
@@ -242,8 +243,8 @@ func (suite *GraphTestSuite) TestBlocks_returnsCorrectBlocks(t *C) {
 	child, err := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
 	assert.NoError(t, err)
 
-	block1 := RandDat(graph.MEGABYTE)
-	block2 := RandDat(graph.MEGABYTE)
+	block1 := testutils.RandDat(graph.MEGABYTE)
+	block2 := testutils.RandDat(graph.MEGABYTE)
 
 	assert.NoError(t, child.WriteData(block1, 0))
 	assert.NoError(t, child.WriteData(block2, graph.MEGABYTE))
@@ -325,7 +326,7 @@ func (suite *GraphTestSuite) TestMove_throwsIfMovingNodeInsideItself(t *C) {
 func (suite *GraphTestSuite) TestChmod_throwsIfNewModeIsDirAndHasSize(t *C) {
 	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
 	assert.NoError(t, err)
-	assert.NoError(t, child.WriteData(RandDat(graph.MEGABYTE), 0))
+	assert.NoError(t, child.WriteData(testutils.RandDat(graph.MEGABYTE), 0))
 
 	assert.EqualError(t, child.Chmod(os.ModeDir), "File has size, cannot change to directory")
 }
@@ -348,7 +349,7 @@ func (suite *GraphTestSuite) TestTouch_throwsIfDateInFuture(t *C) {
 
 func (suite *GraphTestSuite) TestNodeSeeker_readsCorrectData(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 
 	assert.NoError(t, child.WriteData(dat, 0))
 
@@ -403,7 +404,7 @@ func (suite *GraphTestSuite) BenchmarkSize(t *C) {
 	assert.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		err := node.WriteData(RandDat(graph.MEGABYTE), int64(i*graph.MEGABYTE))
+		err := node.WriteData(testutils.RandDat(graph.MEGABYTE), int64(i*graph.MEGABYTE))
 		assert.NoError(t, err)
 	}
 
@@ -418,6 +419,7 @@ func makeNode(name, parentId string, mTime time.Time, ng *graph.NodeGraph) (*gra
 		Name:     name,
 		ParentId: parentId,
 		MTime:    mTime,
+		Mode:     0755,
 	}
 	if node, err := ng.NewNodeWithNodeInfo(nodeInfo); err != nil {
 		return nil, err

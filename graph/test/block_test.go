@@ -6,20 +6,15 @@ import (
 	"path/filepath"
 	"time"
 
-	"testing"
-
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
+	"github.com/sdcoffey/olympus/graph/testutils"
 )
 
-func TestMain(m *testing.M) {
-	m.Run()
-}
-
 func (suite *GraphTestSuite) TestReader_returnsCorrectReader(t *C) {
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 	blockFingerprint := graph.Hash(dat)
 
 	path := filepath.Join(env.EnvPath(env.DataPath), blockFingerprint)
@@ -34,13 +29,13 @@ func (suite *GraphTestSuite) TestReader_returnsCorrectReader(t *C) {
 }
 
 func (suite *GraphTestSuite) TestHash(t *C) {
-	dat := (RandDat(graph.MEGABYTE))
+	dat := (testutils.RandDat(graph.MEGABYTE))
 	fingerprint := graph.Hash(dat)
 	assert.NotEqual(t, "", fingerprint)
 }
 
 func (suite *GraphTestSuite) TestHash_similarDataHashesDifferently(t *C) {
-	dat1 := RandDat(1024 * 1024)
+	dat1 := testutils.RandDat(1024 * 1024)
 	dat2 := make([]byte, len(dat1))
 	copy(dat2, dat1)
 
@@ -53,7 +48,7 @@ func (suite *GraphTestSuite) TestHash_similarDataHashesDifferently(t *C) {
 }
 
 func (suite *GraphTestSuite) TestWriteData_writesData(t *C) {
-	dat := RandDat(graph.MEGABYTE)
+	dat := testutils.RandDat(graph.MEGABYTE)
 	fingerprint := graph.Hash(dat)
 
 	n, err := graph.Write(fingerprint, dat)
@@ -70,7 +65,7 @@ func (suite *GraphTestSuite) TestWriteData_writesData(t *C) {
 }
 
 func (suite *GraphTestSuite) TestWrite_throwsIfWrongHash(t *C) {
-	dat := RandDat(graph.MEGABYTE)
+	dat := testutils.RandDat(graph.MEGABYTE)
 	fingerprint := "abcd"
 
 	n, err := graph.Write(fingerprint, dat)
@@ -79,7 +74,7 @@ func (suite *GraphTestSuite) TestWrite_throwsIfWrongHash(t *C) {
 }
 
 func (suite *GraphTestSuite) TestWrite_doesNotDuplicateDataOnDisk(t *C) {
-	dat := RandDat(graph.MEGABYTE)
+	dat := testutils.RandDat(graph.MEGABYTE)
 	hash := graph.Hash(dat)
 
 	_, err := graph.Write(hash, dat)
@@ -103,7 +98,7 @@ func (suite *GraphTestSuite) TestWrite_doesNotDuplicateDataOnDisk(t *C) {
 }
 
 func (suite *GraphTestSuite) TestWrite_throwsIfBadSize(t *C) {
-	dat := RandDat(graph.MEGABYTE + 1)
+	dat := testutils.RandDat(graph.MEGABYTE + 1)
 	fingerprint := graph.Hash(dat)
 
 	n, err := graph.Write(fingerprint, dat)
@@ -112,7 +107,7 @@ func (suite *GraphTestSuite) TestWrite_throwsIfBadSize(t *C) {
 }
 
 func (suite *GraphTestSuite) TestSizeOnDisk_returnsCorrectSizeForHash(t *C) {
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
 
 	_, err := graph.Write(fingerprint, dat)
@@ -132,7 +127,7 @@ func (suite *GraphTestSuite) TestSizeOnDisk_throwsForBadFingerprint(t *C) {
 }
 
 func (suite *GraphTestSuite) TestLocationOnDisk_returnsCorrectLocationForFingerprint(t *C) {
-	dat := RandDat(1024)
+	dat := testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
 
 	_, err := graph.Write(fingerprint, dat)
@@ -146,7 +141,7 @@ func (suite *GraphTestSuite) TestLocationOnDisk_returnsCorrectLocationForFingerp
 }
 
 func (suite *GraphTestSuite) BenchmarkBlockHash(t *C) {
-	dat := RandDat(graph.MEGABYTE)
+	dat := testutils.RandDat(graph.MEGABYTE)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {

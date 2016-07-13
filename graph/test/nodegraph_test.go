@@ -36,7 +36,7 @@ func (suite *GraphTestSuite) TestNodeWithNodeInfo(t *C) {
 	assert.Equal(t, graph.RootNodeId, node.Parent().Id)
 	assert.Equal(t, "node", node.Name())
 	assert.Equal(t, now, node.MTime())
-	assert.Equal(t, os.FileMode(4), node.Mode())
+	assert.EqualValues(t, os.FileMode(4), node.Mode())
 	assert.Equal(t, "application/json", node.Type())
 }
 
@@ -84,7 +84,11 @@ func (suite *GraphTestSuite) TestRemoveNode_throwsWhenDeletingRootNode(t *C) {
 func (suite *GraphTestSuite) TestRemoveNode_deletesAllChildNodes(t *C) {
 	child, _ := suite.ng.CreateDirectory(graph.RootNodeId, "child")
 	child2, _ := suite.ng.CreateDirectory(graph.RootNodeId, "child2")
-	suite.ng.CreateDirectory(child2.Id, "child3")
+	suite.ng.NewNodeWithNodeInfo(graph.NodeInfo{
+		ParentId: child2.Id,
+		Name:     "nestedChild.txt",
+		Mode:     755,
+	})
 
 	assert.NoError(t, suite.ng.RemoveNode(child2))
 	assert.Len(t, child2.Children(), 0)

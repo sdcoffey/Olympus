@@ -93,7 +93,7 @@ func (ng *NodeGraph) NodeWithNodeInfo(info NodeInfo) *Node {
 }
 
 func (ng *NodeGraph) RemoveNode(nd *Node) (err error) {
-	if nd.Id == ng.RootNode.Id {
+	if nd.Id == RootNodeId {
 		return errors.New("Cannot delete root node")
 	}
 
@@ -148,7 +148,7 @@ func (ng *NodeGraph) removeNode(nd *Node) (err error) {
 		transaction.RemoveQuad(cayley.Quad(nd.Id, parentLink, nd.Parent().Id, ""))
 	}
 	if nd.Type() != "" {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, typeLink, fmt.Sprint(nd.Size()), ""))
+		transaction.RemoveQuad(cayley.Quad(nd.Id, typeLink, nd.Type(), ""))
 	}
 
 	err = ng.ApplyTransaction(transaction)
