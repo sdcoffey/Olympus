@@ -31,7 +31,10 @@ install-cli:
 	cp build/bin/cli /usr/local/bin/olympus-cli
 
 test: clean
-	@go test ./...
+	@for package in $(pkgs); do \
+		go test ./$$package ; \
+		if [ -d "./$$package/test" ]; then go test ./$$package/test ; fi \
+	done
 
 testcover: clean
 	@go test -cover ./...
