@@ -1,6 +1,7 @@
-<table class="nodeTable">
+<table class="nodeTable"
+  (click)="onChildSelected(-1, item)">
   <tr *ngFor="#item of children; #i = index"
-    (dblclick)="navigateTo(item)"
+    (dblclick)="openItem(item)"
     (click)="onChildSelected(i, item)"
     [ngClass]="{selected: i == selectedIndex }"
     class="nodeRow"
@@ -9,6 +10,6 @@
       <i class="material-icons">{{item.iconString()}}</i>
     </td>
     <td>{{item.Name}}</td>
-    <td (click)="delete($event, item)"><i class="material-icons">delete</i></td>
+    <td (click)="deleteItem($event, item)"><i class="material-icons">delete</i></td>
   </tr>
 </table>

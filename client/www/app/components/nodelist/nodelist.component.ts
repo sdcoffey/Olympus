@@ -41,16 +41,16 @@ export class NodeListComponent implements OnInit {
     }
   }
 
-  navigateTo(node: NodeInfo) {
+  openItem(node: NodeInfo) {
     if (node.isDir()) {
       this._router.navigate(['/Browse', {parentId: node.Id}]);
     } else {
-      window.open('/v1/dl/' + node.Id, '_blank')
+      window.open(`/v1/node/${node.Id}/stream`, '_blank')
     }
   }
 
-  delete(event: MouseEvent, node: NodeInfo) {
-    event.preventDefault();
+  deleteItem($event: MouseEvent, node: NodeInfo) {
+    $event.preventDefault();
     this._api.deleteNode(node.Id)
       .subscribe((success: boolean) => {
         if (success) {

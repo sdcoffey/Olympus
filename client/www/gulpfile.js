@@ -58,7 +58,7 @@ gulp.task('compile', function () {
     .pipe(sourcemaps.init())
     .pipe(preprocess({ context: { PROD: production } }))
     .pipe(typescript(tscConfig.compilerOptions));
-  
+
   if (production) {
     compiler.pipe(uglify());
   } else {

@@ -10,7 +10,7 @@ export class ApiClient {
   constructor(private http: Http) {}
 
   listNodes(id: string): Observable<NodeInfo[]> {
-    return this.http.get(`/v1/ls/${id}`)
+    return this.http.get(`/v1/node/${id}`)
       .map((res: Response) => {
         var children = new Array<NodeInfo>();
         var json_array = res.json();
@@ -22,7 +22,7 @@ export class ApiClient {
   }
 
   deleteNode(id: string): Observable<boolean> {
-    return this.http.delete(`/v1/rm/${id}`)
+    return this.http.delete(`/v1/node/${id}`)
       .map((res:Response) => res.status == 200);
   }
 
