@@ -1,4 +1,4 @@
-FROM golang:1.6.0-alpine
+FROM golang:1.7.0-alpine
 
 ADD . /go/src/github.com/sdcoffey/olympus
 RUN go install github.com/sdcoffey/olympus/server
