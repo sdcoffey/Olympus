@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
@@ -16,121 +15,115 @@ func (suite *GraphTestSuite) TestNode_NodeInfo(t *C) {
 	now := time.Now()
 
 	child, err := makeNode("child.txt", suite.ng.RootNode.Id, now, suite.ng)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	info := child.NodeInfo()
-	assert.Equal(t, child.Id, info.Id)
-	assert.Equal(t, suite.ng.RootNode.Id, info.ParentId)
-	assert.Equal(t, "child.txt", info.Name)
-	assert.Equal(t, "text/plain", info.Type)
-	assert.Equal(t, now.Unix(), info.MTime.Unix())
-	assert.EqualValues(t, child.Mode(), info.Mode)
+	t.Check(info.Id, Equals, child.Id)
+	t.Check(info.ParentId, Equals, graph.RootNodeId)
+	t.Check(info.Name, Equals, "child.txt")
+	t.Check(info.Type, Equals, "text/plain")
+	t.Check(info.MTime.Unix(), Equals, now.Unix())
+	t.Check(info.Mode, Equals, child.Mode())
 }
 
 func (suite *GraphTestSuite) TestName_returnsName(t *C) {
 	node, err := suite.ng.NewNode("A cool folder", graph.RootNodeId)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "A cool folder", node.Name())
+	t.Check(err, IsNil)
+	t.Check(node.Name(), Equals, "A cool folder")
 }
 
 func (suite *GraphTestSuite) TestExists_returnsTrueIfName(t *C) {
 	node, err := suite.ng.NewNode("name", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.True(t, node.Exists())
+	t.Check(err, IsNil)
+	t.Check(node.Exists(), Equals, true)
 }
 
 func (suite *GraphTestSuite) TestType(t *C) {
 	node, err := suite.ng.NewNode("style.css", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.Equal(t, "text/css", node.Type())
+	t.Check(err, IsNil)
+	t.Check(node.Type(), Equals, "text/css")
 }
 
 func (suite *GraphTestSuite) TestSize(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.NoError(t, node.WriteData(testutils.RandDat(graph.MEGABYTE), 0))
-	assert.NoError(t, node.WriteData(testutils.RandDat(1024), graph.MEGABYTE))
+	t.Check(node.WriteData(testutils.RandDat(graph.MEGABYTE), 0), IsNil)
+	t.Check(node.WriteData(testutils.RandDat(1024), graph.MEGABYTE), IsNil)
 
-	assert.EqualValues(t, graph.MEGABYTE+1024, node.Size())
+	t.Check(node.Size(), Equals, int64(graph.MEGABYTE+1024))
 }
 
 func (suite *GraphTestSuite) TestMode(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.NoError(t, node.Chmod(os.ModeDir))
-	assert.EqualValues(t, os.ModeDir, node.Mode())
+	t.Check(err, IsNil)
+	t.Check(node.Chmod(os.ModeDir), IsNil)
+	t.Check(node.Mode(), Equals, os.ModeDir)
 }
 
 func (suite *GraphTestSuite) TestIsDir_returnsTrueForCorrectMode(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.NoError(t, node.Chmod(os.ModeDir))
-
-	assert.True(t, node.IsDir())
+	t.Check(err, IsNil)
+	t.Check(node.Chmod(os.ModeDir), IsNil)
+	t.Check(node.IsDir(), Equals, true)
 }
 
 func (suite *GraphTestSuite) TestIsDir_returnsFalseForIncorrectMode(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.NoError(t, node.Chmod(123))
-
-	assert.False(t, node.IsDir())
+	t.Check(err, IsNil)
+	t.Check(node.Chmod(123), IsNil)
+	t.Check(node.IsDir(), Equals, false)
 }
 
 func (suite *GraphTestSuite) TestModTime(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
-
-	assert.True(t, time.Now().Sub(node.MTime()) < time.Second, Equals, true)
+	t.Check(err, IsNil)
+	t.Check(time.Now().Sub(node.MTime()) < time.Second, Equals, true)
 }
 
 func (suite *GraphTestSuite) TestChildren_returnsCorrectChildren(t *C) {
 	_, err := suite.ng.NewNode("child1", graph.RootNodeId)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	childNode2, err := suite.ng.NewNode("child2", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.NoError(t, childNode2.Chmod(os.ModeDir))
+	t.Check(err, IsNil)
+	t.Check(childNode2.Chmod(os.ModeDir), IsNil)
 
 	children := suite.ng.RootNode.Children()
-	assert.EqualValues(t, 2, len(children))
+	t.Check(children, HasLen, 2)
 
 	for idx, child := range children {
-		assert.Equal(t, graph.RootNodeId, child.Parent().Id)
+		t.Check(child.Parent().Id, Equals, graph.RootNodeId)
 		if idx == 0 {
-			assert.Equal(t, "child1", child.Name())
+			t.Check(child.Name(), Equals, "child1")
 		} else {
-			assert.Equal(t, "child2", child.Name())
+			t.Check(child.Name(), Equals, "child2")
 		}
 	}
 
 	_, err = suite.ng.NewNode("child3", childNode2.Id)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	children = childNode2.Children()
-	assert.EqualValues(t, 1, len(children))
-	assert.EqualValues(t, childNode2.Id, children[0].Parent().Id)
-	assert.EqualValues(t, "child3", children[0].Name())
+	t.Check(children, HasLen, 1)
+	t.Check(children[0].Parent().Id, Matches, childNode2.Id)
+	t.Check(children[0].Name(), Matches, "child3")
 }
 
 func (suite *GraphTestSuite) TestParent(t *C) {
 	rootNode := suite.ng.RootNode
-
-	assert.Nil(t, rootNode.Parent())
+	t.Check(rootNode.Parent(), IsNil)
 
 	childNode, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.Equal(t, rootNode.Id, childNode.Parent().Id)
-	assert.Equal(t, rootNode.Name(), childNode.Parent().Name())
-	assert.EqualValues(t, rootNode.Mode(), childNode.Parent().Mode())
+	t.Check(childNode.Parent().Id, Matches, rootNode.Id)
+	t.Check(childNode.Parent().Name(), Matches, rootNode.Name())
+	t.Check(childNode.Parent().Mode(), Equals, rootNode.Mode())
 }
 
 func (suite *GraphTestSuite) TestSave(t *C) {
 	mTime := time.Now()
-
 	ni := graph.NodeInfo{
 		Name:     "child",
 		ParentId: graph.RootNodeId,
@@ -140,11 +133,11 @@ func (suite *GraphTestSuite) TestSave(t *C) {
 	}
 
 	node, err := suite.ng.NewNodeWithNodeInfo(ni)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	assertProperty := func(expected string, actual cayley.Iterator) {
-		assert.True(t, cayley.RawNext(actual))
-		assert.Equal(t, expected, suite.ng.NameOf(actual.Result()))
+		t.Check(cayley.RawNext(actual), Equals, true)
+		t.Check(suite.ng.NameOf(actual.Result()), Equals, expected)
 	}
 
 	it := cayley.StartPath(suite.ng, node.Id).Out("isNamed").BuildIterator()
@@ -162,7 +155,7 @@ func (suite *GraphTestSuite) TestSave(t *C) {
 
 func (suite *GraphTestSuite) TestSave_returnsErrorWhenFileHasNoName(t *C) {
 	_, err := suite.ng.NewNode("", graph.RootNodeId)
-	assert.EqualError(t, err, "Cannot add nameless file")
+	t.Check(err, ErrorMatches, "Cannot add nameless file")
 }
 
 func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
@@ -170,12 +163,12 @@ func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
 	dat := testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
 
-	assert.NoError(t, child.WriteData(dat, 0))
+	t.Check(child.WriteData(dat, 0), IsNil)
 
 	blocks := child.Blocks()
-	assert.Len(t, blocks, 1)
+	t.Check(blocks, HasLen, 1)
 	if len(blocks) > 0 {
-		assert.Equal(t, fingerprint, blocks[0].Hash)
+		t.Check(blocks[0].Hash, Matches, fingerprint)
 	}
 }
 
@@ -183,115 +176,112 @@ func (suite *GraphTestSuite) TestWriteData_throwsOnInvalidBlockOffset(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
 	dat := testutils.RandDat(1024)
 
-	assert.EqualError(t, child.WriteData(dat, 1), fmt.Sprint("1 is not a valid offset for block size ", graph.BLOCK_SIZE))
+	t.Check(child.WriteData(dat, 1), ErrorMatches, fmt.Sprint("1 is not a valid offset for block size ", graph.BLOCK_SIZE))
 }
 
 func (suite *GraphTestSuite) TestWriteData_removesExistingFingerprintForOffset(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
 	dat := testutils.RandDat(1024)
 
-	assert.NoError(t, child.WriteData(dat, 0))
+	t.Check(child.WriteData(dat, 0), IsNil)
 
 	dat = testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
-	assert.NoError(t, child.WriteData(dat, 0))
+	t.Check(child.WriteData(dat, 0), IsNil)
 
 	it := cayley.StartPath(suite.ng, child.Id).Out("offset-0").BuildIterator()
-	assert.True(t, cayley.RawNext(it))
-	assert.Equal(t, fingerprint, suite.ng.NameOf(it.Result()))
+	t.Check(cayley.RawNext(it), Equals, true)
+	t.Check(suite.ng.NameOf(it.Result()), Equals, fingerprint)
 }
 
 func (suite *GraphTestSuite) TestWriteData_SizeChanges(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
 	dat := testutils.RandDat(graph.BLOCK_SIZE)
-	assert.NoError(t, child.WriteData(dat, 0))
+	t.Check(child.WriteData(dat, 0), IsNil)
 
-	assert.EqualValues(t, graph.MEGABYTE, child.Size())
+	t.Check(child.Size(), Equals, int64(graph.MEGABYTE))
 
 	dat = testutils.RandDat(graph.BLOCK_SIZE)
-	assert.NoError(t, child.WriteData(dat, graph.BLOCK_SIZE))
-
-	assert.EqualValues(t, graph.MEGABYTE*2, child.Size())
+	t.Check(child.WriteData(dat, graph.BLOCK_SIZE), IsNil)
+	t.Check(child.Size(), Equals, int64(graph.MEGABYTE*2))
 }
 
 func (suite *GraphTestSuite) TestBlockWithOffset_findsCorrectBlock(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
 	data := testutils.RandDat(graph.MEGABYTE)
-	assert.NoError(t, child.WriteData(data, 0))
+	t.Check(child.WriteData(data, 0), IsNil)
 
 	data2 := testutils.RandDat(graph.MEGABYTE)
-	assert.NoError(t, child.WriteData(data2, graph.MEGABYTE))
+	t.Check(child.WriteData(data2, graph.MEGABYTE), IsNil)
 
 	foundBlock := child.BlockWithOffset(0)
-	assert.Equal(t, graph.Hash(data), string(foundBlock))
+	t.Check(string(foundBlock), Equals, graph.Hash(data))
 
 	foundBlock2 := child.BlockWithOffset(graph.MEGABYTE)
-	assert.Equal(t, graph.Hash(data2), string(foundBlock2))
+	t.Check(string(foundBlock2), Equals, graph.Hash(data2))
 }
 
 func (suite *GraphTestSuite) TestBlockWithOffset_returnsEmptyStringForDir(t *C) {
 	fingerprint := suite.ng.RootNode.BlockWithOffset(0)
-	assert.Equal(t, "", fingerprint)
+	t.Check(fingerprint, Equals, "")
 }
 
 func (suite *GraphTestSuite) TestBlocks_returnsEmptySliceForDir(t *C) {
 	blocks := suite.ng.RootNode.Blocks()
-	assert.Len(t, blocks, 0)
+	t.Check(blocks, HasLen, 0)
 }
 
 func (suite *GraphTestSuite) TestBlocks_returnsCorrectBlocks(t *C) {
 	child, err := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	block1 := testutils.RandDat(graph.MEGABYTE)
 	block2 := testutils.RandDat(graph.MEGABYTE)
 
-	assert.NoError(t, child.WriteData(block1, 0))
-	assert.NoError(t, child.WriteData(block2, graph.MEGABYTE))
+	t.Check(child.WriteData(block1, 0), IsNil)
+	t.Check(child.WriteData(block2, graph.MEGABYTE), IsNil)
 
 	blocks := child.Blocks()
-	assert.Len(t, blocks, 2)
+	t.Assert(blocks, HasLen, 2)
 
-	assert.EqualValues(t, 0, blocks[0].Offset)
-	assert.EqualValues(t, graph.MEGABYTE, blocks[1].Offset)
+	t.Check(blocks[0].Offset, Equals, int64(0))
+	t.Check(blocks[1].Offset, Equals, int64(graph.MEGABYTE))
 
-	assert.Equal(t, graph.Hash(block1), blocks[0].Hash)
-	assert.Equal(t, graph.Hash(block2), blocks[1].Hash)
+	t.Check(blocks[0].Hash, Equals, graph.Hash(block1))
+	t.Check(blocks[1].Hash, Equals, graph.Hash(block2))
 }
 
 func (suite *GraphTestSuite) TestChmod_chmodsSuccessfully(t *C) {
 	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
-	assert.NoError(t, err)
-
-	assert.NoError(t, child.Chmod(os.FileMode(0777)))
-	assert.EqualValues(t, os.FileMode(0777), child.Mode())
+	t.Check(err, IsNil)
+	t.Check(child.Chmod(os.FileMode(0777)), IsNil)
+	t.Check(child.Mode(), Equals, os.FileMode(0777))
 }
 
 func (suite *GraphTestSuite) TestRename_renamesSuccessfully(t *C) {
 	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(child.Name(), Equals, "child")
 
-	assert.Equal(t, "child", child.Name())
-
-	assert.NoError(t, child.Rename("child_renamed"))
-	assert.Equal(t, "child_renamed", child.Name())
+	t.Check(child.Rename("child_renamed"), IsNil)
+	t.Check(child.Name(), Equals, "child_renamed")
 }
 
 func (suite *GraphTestSuite) TestRename_changesType(t *C) {
 	child, err := makeNode("child.txt", graph.RootNodeId, time.Now(), suite.ng)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.Equal(t, "child.txt", child.Name())
-	assert.Equal(t, "text/plain", child.Type())
+	t.Check("child.txt", Equals, child.Name())
+	t.Check("text/plain", Equals, child.Type())
 
-	assert.NoError(t, child.Rename("child.json"))
-	assert.Equal(t, "child.json", child.Name())
-	assert.Equal(t, "application/json", child.Type())
+	t.Check(child.Rename("child.json"), IsNil)
+	t.Check("child.json", Equals, child.Name())
+	t.Check("application/json", Equals, child.Type())
 }
 
 func (suite *GraphTestSuite) TestMove_movesSuccessfully(t *C) {
 	folder, err := suite.ng.CreateDirectory(graph.RootNodeId, "folder1")
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	nodeInfo := graph.NodeInfo{
 		Name:     "child.txt",
@@ -300,35 +290,34 @@ func (suite *GraphTestSuite) TestMove_movesSuccessfully(t *C) {
 	}
 
 	child, err := suite.ng.NewNodeWithNodeInfo(nodeInfo)
-	assert.NoError(t, err)
 
-	assert.Equal(t, graph.RootNodeId, child.Parent().Id)
+	t.Check(child.Parent().Id, Equals, graph.RootNodeId)
 
-	assert.NoError(t, child.Move(folder.Id))
-	assert.Equal(t, folder.Id, child.Parent().Id)
+	t.Check(child.Move(folder.Id), IsNil)
+	t.Check(child.Parent().Id, Equals, folder.Id)
 }
 
 func (suite *GraphTestSuite) TestMove_throwsIfMovingRootNode(t *C) {
 	folder, _ := suite.ng.CreateDirectory(graph.RootNodeId, "folder")
-	assert.EqualError(t, suite.ng.RootNode.Move(folder.Id), "Cannot move root node")
+	t.Check(suite.ng.RootNode.Move(folder.Id), ErrorMatches, "Cannot move root node")
 }
 
 func (suite *GraphTestSuite) TestMove_throwsIfMovingNodeInsideItself(t *C) {
 	folder, _ := suite.ng.CreateDirectory(graph.RootNodeId, "folder")
 	nestedFolder, _ := suite.ng.CreateDirectory(folder.Id, "_folder")
 
-	assert.EqualError(t, folder.Move(folder.Id), "Cannot move node inside itself")
+	t.Check(folder.Move(folder.Id), ErrorMatches, "Cannot move node inside itself")
 
 	// Also shouldn't be able to move a folder into one of it's children
-	assert.EqualError(t, folder.Move(nestedFolder.Id), "Cannot move node inside itself")
+	t.Check(folder.Move(nestedFolder.Id), ErrorMatches, "Cannot move node inside itself")
 }
 
 func (suite *GraphTestSuite) TestChmod_throwsIfNewModeIsDirAndHasSize(t *C) {
 	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
-	assert.NoError(t, err)
-	assert.NoError(t, child.WriteData(testutils.RandDat(graph.MEGABYTE), 0))
+	t.Check(err, IsNil)
+	t.Check(child.WriteData(testutils.RandDat(graph.MEGABYTE), 0), IsNil)
 
-	assert.EqualError(t, child.Chmod(os.ModeDir), "File has size, cannot change to directory")
+	t.Check(child.Chmod(os.ModeDir), ErrorMatches, "File has size, cannot change to directory")
 }
 
 func (suite *GraphTestSuite) TestTouch_updatesMTime(t *C) {
@@ -336,40 +325,39 @@ func (suite *GraphTestSuite) TestTouch_updatesMTime(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, then, suite.ng)
 
 	now := time.Now()
-	assert.NoError(t, child.Touch(now))
-
-	assert.EqualValues(t, now.Unix(), child.MTime().Unix())
+	t.Check(child.Touch(now), IsNil)
+	t.Check(child.MTime().Unix(), Equals, now.Unix())
 }
 
 func (suite *GraphTestSuite) TestTouch_throwsIfDateInFuture(t *C) {
 	child, err := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
-	assert.NoError(t, err)
-	assert.EqualError(t, child.Touch(time.Now().Add(time.Second)), "Cannot set modified time in the future")
+	t.Check(err, IsNil)
+	t.Check(child.Touch(time.Now().Add(time.Second)), ErrorMatches, "Cannot set modified time in the future")
 }
 
 func (suite *GraphTestSuite) TestNodeSeeker_readsCorrectData(t *C) {
 	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
 	dat := testutils.RandDat(1024)
 
-	assert.NoError(t, child.WriteData(dat, 0))
+	t.Check(child.WriteData(dat, 0), IsNil)
 
 	nodeSeeker := child.ReadSeeker()
 	offset, err := nodeSeeker.Seek(0, 0)
-	assert.NoError(t, err)
-	assert.EqualValues(t, 0, offset)
+	t.Check(err, IsNil)
+	t.Check(offset, Equals, int64(0))
 
 	p := make([]byte, 1)
 	nodeSeeker.Read(p) // expect 1 byte to be read from front of file
 
-	assert.EqualValues(t, dat[0], p[0])
+	t.Check(p[0], Equals, dat[0])
 
 	offset, err = nodeSeeker.Seek(512, 0)
-	assert.NoError(t, err)
-	assert.EqualValues(t, 512, offset)
+	t.Check(err, IsNil)
+	t.Check(offset, Equals, int64(512))
 
 	p = make([]byte, 25)
 	nodeSeeker.Read(p)
-	assert.Equal(t, dat[offset:int(offset)+len(p)], p)
+	t.Check(p, DeepEquals, dat[offset:int(offset)+len(p)])
 }
 
 func (suite *GraphTestSuite) BenchmarkWrite(t *C) {
@@ -391,7 +379,7 @@ func (suite *GraphTestSuite) BenchmarkWrite(t *C) {
 
 func (suite *GraphTestSuite) BenchmarkName(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
@@ -401,11 +389,11 @@ func (suite *GraphTestSuite) BenchmarkName(t *C) {
 
 func (suite *GraphTestSuite) BenchmarkSize(t *C) {
 	node, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	for i := 0; i < 10; i++ {
 		err := node.WriteData(testutils.RandDat(graph.MEGABYTE), int64(i*graph.MEGABYTE))
-		assert.NoError(t, err)
+		t.Check(err, IsNil)
 	}
 
 	t.ResetTimer()

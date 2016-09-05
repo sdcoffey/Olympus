@@ -49,7 +49,7 @@ func Write(hash string, d []byte) (int, error) {
 	if len(d) > BLOCK_SIZE {
 		return 0, errors.New("Data length exceeds max block size")
 	} else if dataHash != hash {
-		return 0, errors.New("Data has does not match this blocks hash")
+		return 0, errors.New("Data hash does not match this block's hash")
 	}
 
 	if file, err := os.OpenFile(LocationOnDisk(hash), os.O_CREATE|os.O_EXCL|os.O_RDWR, os.FileMode(0644)); err != nil {

@@ -1,21 +1,19 @@
 package graph
 
 import (
-	"fmt"
 	"os"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
 )
 
 func (suite *GraphTestSuite) TestNode_NewNode_hasUuidAndTimeStamp(t *C) {
 	node, err := suite.ng.NewNode("root", graph.RootNodeId)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, node.Id)
-	assert.NotEmpty(t, node.MTime())
-	assert.True(t, time.Now().Sub(node.MTime()) < time.Second, Equals, true)
+	t.Check(err, IsNil)
+	t.Check(node.Id, Not(Equals), "")
+	t.Check(node.MTime(), Not(Equals), "")
+	t.Check(time.Now().Sub(node.MTime()) < time.Second, Equals, true)
 }
 
 func (suite *GraphTestSuite) TestNodeWithNodeInfo(t *C) {
@@ -30,14 +28,14 @@ func (suite *GraphTestSuite) TestNodeWithNodeInfo(t *C) {
 	}
 
 	node, err := suite.ng.NewNodeWithNodeInfo(info)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.NotEmpty(t, node.Id)
-	assert.Equal(t, graph.RootNodeId, node.Parent().Id)
-	assert.Equal(t, "node", node.Name())
-	assert.Equal(t, now, node.MTime())
-	assert.EqualValues(t, os.FileMode(4), node.Mode())
-	assert.Equal(t, "application/json", node.Type())
+	t.Check(node.Id, Not(Equals), "")
+	t.Check(node.Parent().Id, Equals, graph.RootNodeId)
+	t.Check(node.Name(), Equals, "node")
+	t.Check(node.MTime(), Equals, now)
+	t.Check(node.Mode(), Equals, os.FileMode(4))
+	t.Check(node.Type(), Equals, "application/json")
 }
 
 func (suite *GraphTestSuite) TestNodeWithName(t *C) {
@@ -49,36 +47,36 @@ func (suite *GraphTestSuite) TestNodeWithName(t *C) {
 	}
 
 	_, err := suite.ng.NewNodeWithNodeInfo(nodeInfo)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	fetchedChild := suite.ng.NodeWithName(graph.RootNodeId, "child")
-	assert.NotNil(t, fetchedChild)
-	assert.Equal(t, "child", fetchedChild.Name())
-	assert.Equal(t, graph.RootNodeId, fetchedChild.Parent().Id)
-	assert.EqualValues(t, os.ModeDir, fetchedChild.Mode())
-	assert.True(t, fetchedChild.MTime().Sub(time.Now()) < time.Second)
+	t.Check(fetchedChild, Not(IsNil))
+	t.Check(fetchedChild.Name(), Equals, "child")
+	t.Check(fetchedChild.Parent().Id, Equals, graph.RootNodeId)
+	t.Check(fetchedChild.Mode(), Equals, os.ModeDir)
+	t.Check(fetchedChild.MTime().Sub(time.Now()) < time.Second, Equals, true)
 }
 
 func (suite *GraphTestSuite) TestCreateDirectory(t *C) {
 	child, err := suite.ng.CreateDirectory(graph.RootNodeId, "child")
-	assert.NoError(t, err)
-	assert.NotNil(t, child)
-	assert.NotEmpty(t, child.Id)
-	assert.Equal(t, graph.RootNodeId, child.Parent().Id)
-	assert.Len(t, suite.ng.RootNode.Children(), 1)
+	t.Check(err, IsNil)
+	t.Check(t, Not(IsNil))
+	t.Check(child.Id, Not(Equals), "")
+	t.Check(child.Parent().Id, Equals, graph.RootNodeId)
+	t.Check(suite.ng.RootNode.Children(), HasLen, 1)
 }
 
 func (suite *GraphTestSuite) TestCreateDirectory_returnsErrorWhenParentNotDir(t *C) {
 	childNode, err := suite.ng.NewNode("child", graph.RootNodeId)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	_, err = suite.ng.CreateDirectory(childNode.Id, "secondChild")
-	assert.EqualError(t, err, "Cannot add node to a non-directory")
+	t.Check(err, ErrorMatches, "Cannot add node to a non-directory")
 }
 
 func (suite *GraphTestSuite) TestRemoveNode_throwsWhenDeletingRootNode(t *C) {
 	err := suite.ng.RemoveNode(suite.ng.RootNode)
-	assert.EqualError(t, err, "Cannot delete root node")
+	t.Check(err, ErrorMatches, "Cannot delete root node")
 }
 
 func (suite *GraphTestSuite) TestRemoveNode_deletesAllChildNodes(t *C) {
@@ -90,12 +88,12 @@ func (suite *GraphTestSuite) TestRemoveNode_deletesAllChildNodes(t *C) {
 		Mode:     755,
 	})
 
-	assert.NoError(t, suite.ng.RemoveNode(child2))
-	assert.Len(t, child2.Children(), 0)
-	assert.Len(t, suite.ng.RootNode.Children(), 1)
+	t.Check(suite.ng.RemoveNode(child2), IsNil)
+	t.Check(child2.Children(), HasLen, 0)
+	t.Check(suite.ng.RootNode.Children(), HasLen, 1)
 
-	assert.NoError(t, suite.ng.RemoveNode(child))
-	assert.Len(t, suite.ng.RootNode.Children(), 0)
+	t.Check(suite.ng.RemoveNode(child), IsNil)
+	t.Check(suite.ng.RootNode.Children(), HasLen, 0)
 }
 
 func (suite *GraphTestSuite) TestNewNode_returnsAnErrorWhenDuplicateSiblingExists(t *C) {
@@ -103,10 +101,10 @@ func (suite *GraphTestSuite) TestNewNode_returnsAnErrorWhenDuplicateSiblingExist
 	t.Check(err, IsNil)
 
 	_, err = suite.ng.NewNode("child", graph.RootNodeId)
-	assert.EqualError(t, err, fmt.Sprintf("Node with name %s already exists in %s", "child", suite.ng.RootNode.Name()))
+	t.Check(err, ErrorMatches, "Node with name child already exists in root")
 }
 
 func (suite *GraphTestSuite) TestNewNode_throwsWhenParentDoesNotExist(t *C) {
 	_, err := suite.ng.NewNode("file", "not-a-file")
-	assert.EqualError(t, err, "Parent not-a-file does not exist")
+	t.Check(err, ErrorMatches, "Parent not-a-file does not exist")
 }
