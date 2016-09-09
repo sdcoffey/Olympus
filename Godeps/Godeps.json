@@ -1,6 +1,7 @@
 {
 	"ImportPath": "github.com/sdcoffey/olympus",
 	"GoVersion": "go1.6",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],

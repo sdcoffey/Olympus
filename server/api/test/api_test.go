@@ -11,20 +11,20 @@ import (
 	"os"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	"github.com/sdcoffey/olympus/server/api"
+	. "github.com/sdcoffey/olympus/testutils"
 )
 
 func (suite *ApiTestSuite) TestListNodes_returns404IfFileNotExist(t *C) {
 	req := suite.request(api.ListNodes.Build("not-a-node"), nil)
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
-	assert.Contains(t, msg(resp), "Node with id: not-a-node does not exist")
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
+	t.Check(msg(resp), Matches, "Node with id: not-a-node does not exist\n")
 }
 
 func (suite *ApiTestSuite) TestListNodes_returnsFilesForValidParent(t *C) {
@@ -33,16 +33,16 @@ func (suite *ApiTestSuite) TestListNodes_returnsFilesForValidParent(t *C) {
 	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child")
 
 	resp, err := suite.client.Do(req)
-	assert.Nil(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
 	var files []graph.NodeInfo
 	decode(resp, &files)
 
-	assert.Len(t, files, 1)
+	t.Check(files, HasLen, 1)
 
 	file := files[0]
-	assert.Equal(t, "child", file.Name)
+	t.Check(file.Name, Equals, "child")
 }
 
 func (suite *ApiTestSuite) TestListNodes_returnsNFilesWhenLimitProvided(t *C) {
@@ -51,16 +51,16 @@ func (suite *ApiTestSuite) TestListNodes_returnsNFilesWhenLimitProvided(t *C) {
 	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child2")
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
 	var files []graph.NodeInfo
 	decode(resp, &files)
 
-	assert.Len(t, files, 1)
+	t.Check(files, HasLen, 1)
 
 	file := files[0]
-	assert.Equal(t, "child1", file.Name)
+	t.Check(file.Name, Equals, "child1")
 }
 
 func (suite *ApiTestSuite) TestListNodes_startsWithNFileWhenWatermarkProvided(t *C) {
@@ -70,16 +70,16 @@ func (suite *ApiTestSuite) TestListNodes_startsWithNFileWhenWatermarkProvided(t 
 	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child2")
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
 	var files []graph.NodeInfo
 	decode(resp, &files)
 
-	assert.Len(t, files, 1)
+	t.Check(files, HasLen, 1)
 
 	file := files[0]
-	assert.Equal(t, "child2", file.Name)
+	t.Check(file.Name, Equals, "child2")
 }
 
 func (suite *ApiTestSuite) TestRmFile_returnsErrorIfFileNotExist(t *C) {
@@ -87,10 +87,10 @@ func (suite *ApiTestSuite) TestRmFile_returnsErrorIfFileNotExist(t *C) {
 	req := suite.request(endpoint, nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 
-	assert.Equal(t, "Node with id: child does not exist\n", msg(resp))
+	t.Check(msg(resp), Matches, "Node with id: child does not exist\n")
 }
 
 func (suite *ApiTestSuite) TestRmFile_removesFileSuccessfully(t *C) {
@@ -102,10 +102,10 @@ func (suite *ApiTestSuite) TestRmFile_removesFileSuccessfully(t *C) {
 	req := suite.request(endpoint, nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
-	assert.EqualValues(t, 0, len(suite.ng.RootNode.Children()))
+	t.Check(suite.ng.RootNode.Children(), HasLen, 0)
 }
 
 func (suite *ApiTestSuite) TestCreateNode_returnsErrorForMissingParent(t *C) {
@@ -119,9 +119,8 @@ func (suite *ApiTestSuite) TestCreateNode_returnsErrorForMissingParent(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (suite *ApiTestSuite) TestCreateNode_ignoresParentIdInBody(t *C) {
@@ -137,12 +136,11 @@ func (suite *ApiTestSuite) TestCreateNode_ignoresParentIdInBody(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusCreated)
 
-	assert.EqualValues(t, http.StatusCreated, resp.StatusCode)
-
-	assert.EqualValues(t, 1, len(suite.ng.RootNode.Children()))
-	assert.Equal(t, "Node", suite.ng.RootNode.Children()[0].Name())
+	t.Assert(suite.ng.RootNode.Children(), HasLen, 1)
+	t.Check(suite.ng.RootNode.Children()[0].Name(), Equals, "Node")
 }
 
 func (suite *ApiTestSuite) TestCreateNode_ignoresMTimeInBody(t *C) {
@@ -158,13 +156,12 @@ func (suite *ApiTestSuite) TestCreateNode_ignoresMTimeInBody(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusCreated)
 
-	assert.EqualValues(t, http.StatusCreated, resp.StatusCode)
-
-	assert.EqualValues(t, 1, len(suite.ng.RootNode.Children()))
+	t.Assert(suite.ng.RootNode.Children(), HasLen, 1)
 	mTime := suite.ng.RootNode.Children()[0].MTime()
-	assert.True(t, mTime.Sub(time.Now()) < time.Second)
+	t.Check(mTime.Sub(time.Now()) < time.Second, IsTrue)
 }
 
 func (suite *ApiTestSuite) TestCreateNode_ignoresSizeInBody(t *C) {
@@ -179,10 +176,10 @@ func (suite *ApiTestSuite) TestCreateNode_ignoresSizeInBody(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusCreated)
 
-	assert.EqualValues(t, http.StatusCreated, resp.StatusCode)
-	assert.EqualValues(t, 0, suite.ng.RootNode.Children()[0].Size())
+	t.Check(suite.ng.RootNode.Children()[0].Size(), Equals, int64(0))
 }
 
 func (suite *ApiTestSuite) TestCreateNode_getsTypeFromExtension(t *C) {
@@ -196,11 +193,10 @@ func (suite *ApiTestSuite) TestCreateNode_getsTypeFromExtension(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusCreated)
 
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
-	assert.Equal(t, "text/plain", suite.ng.RootNode.Children()[0].Type())
+	t.Check(suite.ng.RootNode.Children()[0].Type(), Equals, "text/plain")
 }
 
 func (suite *ApiTestSuite) TestCreateNode_usesTypeInBodyIfProvided(t *C) {
@@ -215,10 +211,10 @@ func (suite *ApiTestSuite) TestCreateNode_usesTypeInBodyIfProvided(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusCreated)
 
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Equal(t, "application/json", suite.ng.RootNode.Children()[0].Type())
+	t.Check(suite.ng.RootNode.Children()[0].Type(), Equals, "application/json")
 }
 
 func (suite *ApiTestSuite) TestCreateNode_returns400ForJunkData(t *C) {
@@ -228,10 +224,10 @@ func (suite *ApiTestSuite) TestCreateNode_returns400ForJunkData(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
 
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), "cannot unmarshal")
+	t.Check(msg(resp), Contains, "cannot unmarshal")
 }
 
 func (suite *ApiTestSuite) TestCreateNode_returns400WhenNodeExists(t *C) {
@@ -245,10 +241,10 @@ func (suite *ApiTestSuite) TestCreateNode_returns400WhenNodeExists(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
 
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), "Node exists")
+	t.Check(msg(resp), Contains, "Node exists")
 }
 
 func (suite *ApiTestSuite) TestCreateNode_createsNodeSuccessfully(t *C) {
@@ -262,19 +258,18 @@ func (suite *ApiTestSuite) TestCreateNode_createsNodeSuccessfully(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusCreated)
 
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
-	assert.EqualValues(t, 1, len(suite.ng.RootNode.Children()))
+	t.Assert(suite.ng.RootNode.Children(), HasLen, 1)
 	node := suite.ng.RootNode.Children()[0]
 
-	assert.NotEmpty(t, node.Id)
-	assert.Equal(t, suite.ng.RootNode.Id, node.Parent().Id)
-	assert.Equal(t, "thing.txt", node.Name())
-	assert.EqualValues(t, 0755, node.Mode().Perm())
-	assert.Equal(t, "text/plain", node.Type())
-	assert.True(t, node.MTime().Sub(time.Now()) < time.Second)
+	t.Check(node.Id, Not(Equals), "")
+	t.Check(node.Parent().Id, Equals, graph.RootNodeId)
+	t.Check(node.Name(), Equals, "thing.txt")
+	t.Check(node.Mode(), Equals, os.FileMode(0755))
+	t.Check(node.Type(), Equals, "text/plain")
+	t.Check(node.MTime().Sub(time.Now()) < time.Second, IsTrue)
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_updatesNode(t *C) {
@@ -284,7 +279,7 @@ func (suite *ApiTestSuite) TestUpdateNode_updatesNode(t *C) {
 	}
 
 	id, err := suite.createNode(suite.ng.RootNode.Id, ni)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	ni.Name = "abcd.ghi"
 	ni.Mode = 0700
@@ -293,14 +288,13 @@ func (suite *ApiTestSuite) TestUpdateNode_updatesNode(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
 	changedNode := suite.ng.RootNode.Children()[0]
-	assert.Equal(t, ni.Name, changedNode.Name())
-	assert.EqualValues(t, ni.Mode, changedNode.Mode())
-	assert.EqualValues(t, ni.Size, changedNode.Size())
+	t.Check(changedNode.Name(), Equals, ni.Name)
+	t.Check(changedNode.Mode(), Equals, ni.Mode)
+	t.Check(changedNode.Size(), Equals, ni.Size)
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_ignoresNewSize(t *C) {
@@ -310,7 +304,7 @@ func (suite *ApiTestSuite) TestUpdateNode_ignoresNewSize(t *C) {
 	}
 
 	id, err := suite.createNode(suite.ng.RootNode.Id, ni)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	ni.Size = 1024
 
@@ -318,12 +312,11 @@ func (suite *ApiTestSuite) TestUpdateNode_ignoresNewSize(t *C) {
 	req := suite.request(endpoint, encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
 	changedNode := suite.ng.NodeWithId(id)
-	assert.EqualValues(t, 0, changedNode.Size())
+	t.Check(changedNode.Size(), Equals, int64(0))
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_returns404ForMissingNode(t *C) {
@@ -336,54 +329,53 @@ func (suite *ApiTestSuite) TestUpdateNode_returns404ForMissingNode(t *C) {
 	req := suite.request(api.UpdateNode.Build("not-an-id"), encode(ni))
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_movesFileSuccessfully(t *C) {
 	folder, err := suite.ng.CreateDirectory(suite.ng.RootNode.Id, "folder 1")
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	nodeInfo := graph.NodeInfo{
 		Name: "file.txt",
 		Mode: 0755,
 	}
 	id, err := suite.createNodeWithSize(suite.ng.RootNode.Id, nodeInfo, 1024)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	nodeInfo.ParentId = folder.Id
 
 	req := suite.request(api.UpdateNode.Build(id), encode(nodeInfo))
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.Empty(t, msg(resp))
+	t.Check(err, IsNil)
+	t.Check(msg(resp), Equals, "")
 
-	assert.Len(t, folder.Children(), 1)
-	assert.Equal(t, "file.txt", folder.Children()[0].Name())
+	t.Check(folder.Children(), HasLen, 1)
+	t.Check(folder.Children()[0].Name(), Equals, "file.txt")
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_renameAndMoveWorksSuccessfully(t *C) {
 	folder, err := suite.ng.CreateDirectory(suite.ng.RootNode.Id, "folder 1")
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	nodeInfo := graph.NodeInfo{
 		Name: "file.txt",
 		Mode: 0755,
 	}
 	id, err := suite.createNodeWithSize(suite.ng.RootNode.Id, nodeInfo, 1024)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	nodeInfo.Name = "file.pdf"
 	nodeInfo.ParentId = folder.Id
 
 	req := suite.request(api.UpdateNode.Build(id), encode(nodeInfo))
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.Empty(t, msg(resp))
+	t.Check(err, IsNil)
+	t.Check(msg(resp), Equals, "")
 
-	assert.Len(t, folder.Children(), 1)
-	assert.Equal(t, "file.pdf", folder.Children()[0].Name())
+	t.Check(folder.Children(), HasLen, 1)
+	t.Check(folder.Children()[0].Name(), Equals, "file.pdf")
 }
 
 func (suite *ApiTestSuite) TestBlocks_listsBlocksForNode(t *C) {
@@ -393,40 +385,40 @@ func (suite *ApiTestSuite) TestBlocks_listsBlocksForNode(t *C) {
 	}
 
 	id, err := suite.createNode(suite.ng.RootNode.Id, ni)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	hash, err := suite.writeBlock(graph.BLOCK_SIZE, 0, id)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	req := suite.request(api.ListBlocks.Build(id), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
 
 	var blocks []graph.BlockInfo
 	decode(resp, &blocks)
 
-	assert.Len(t, blocks, 1)
-	assert.EqualValues(t, 0, blocks[0].Offset)
-	assert.Equal(t, hash, blocks[0].Hash)
+	t.Assert(blocks, HasLen, 1)
+	t.Check(blocks[0].Offset, Equals, int64(0))
+	t.Check(blocks[0].Hash, Equals, hash)
 }
 
 func (suite *ApiTestSuite) TestBlocks_returns404ForMissingNode(t *C) {
 	req := suite.request(api.ListBlocks.Build("abcd"), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (suite *ApiTestSuite) TestBlocks_returns400ForDir(t *C) {
 	req := suite.request(api.ListBlocks.Build(graph.RootNodeId), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns404ForMissingNode(t *C) {
@@ -434,8 +426,8 @@ func (suite *ApiTestSuite) TestWriteBlock_returns404ForMissingNode(t *C) {
 	req := suite.request(api.WriteBlock.Build("node", 0), data)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns201OnSuccess(t *C) {
@@ -445,15 +437,15 @@ func (suite *ApiTestSuite) TestWriteBlock_returns201OnSuccess(t *C) {
 	}
 
 	id, err := suite.createNodeWithSize(graph.RootNodeId, nodeInfo, graph.MEGABYTE)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	node := suite.ng.NodeWithId(id)
 	path := graph.LocationOnDisk(node.Blocks()[0].Hash)
-	assert.NotEmpty(t, path)
+	t.Check(path, Not(Equals), "")
 
 	fi, err := os.Stat(path)
-	assert.NoError(t, err)
-	assert.EqualValues(t, graph.MEGABYTE, fi.Size())
+	t.Check(err, IsNil)
+	t.Check(fi.Size(), Equals, int64(graph.MEGABYTE))
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns400ForMismatchedHashes(t *C) {
@@ -463,7 +455,7 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForMismatchedHashes(t *C) {
 	}
 
 	id, err := suite.createNode(graph.RootNodeId, nodeInfo)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	_, dat := fileData(graph.MEGABYTE)
 
@@ -471,9 +463,9 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForMismatchedHashes(t *C) {
 	req.Header.Add("Content-Hash", "bad hash")
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), "does not match")
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
+	t.Check(msg(resp), Contains, "does not match")
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns400ForInvalidOffset(t *C) {
@@ -483,7 +475,7 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForInvalidOffset(t *C) {
 	}
 
 	id, err := suite.createNode(graph.RootNodeId, nodeInfo)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	offset := 12
 	hash, dat := fileData(graph.MEGABYTE)
@@ -491,9 +483,9 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForInvalidOffset(t *C) {
 	req.Header.Add("Content-Hash", hash)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), fmt.Sprintf("%d is not a valid offset", offset))
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
+	t.Check(msg(resp), Contains, fmt.Sprintf("%d is not a valid offset", offset))
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns400OnNoData(t *C) {
@@ -503,14 +495,14 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400OnNoData(t *C) {
 	}
 
 	id, err := suite.createNode(graph.RootNodeId, nodeInfo)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	offset := 12
 	req := suite.request(api.WriteBlock.Build(id, offset), nil)
 	resp, err := suite.client.Do(req)
 
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns400ForJunkOffest(t *C) {
@@ -520,7 +512,7 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForJunkOffest(t *C) {
 	}
 
 	id, err := suite.createNode(graph.RootNodeId, nodeInfo)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	hash, dat := fileData(graph.MEGABYTE)
 
@@ -530,17 +522,17 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForJunkOffest(t *C) {
 
 	resp, err := suite.client.Do(req)
 
-	assert.NoError(t, err)
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), "Invalid offset parameter: "+offset)
+	t.Check(err, IsNil)
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
+	t.Check(msg(resp), Contains, "Invalid offset parameter")
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns404ForMissingNode(t *C) {
 	req := suite.request(api.ReadBlock.Build("abcd", 0), nil)
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns400ForDir(t *C) {
@@ -548,15 +540,15 @@ func (suite *ApiTestSuite) TestReadBlock_returns400ForDir(t *C) {
 		Name: "child",
 		Mode: os.FileMode(755 | uint32(os.ModeDir)),
 	})
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	req := suite.request(api.ReadBlock.Build(id, 0), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), fmt.Sprintf("Requested node id %s is a directory", id))
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
+	t.Check(msg(resp), Contains, fmt.Sprintf("Requested node id %s is a directory", id))
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns404ForMisalignedOffset(t *C) {
@@ -564,16 +556,16 @@ func (suite *ApiTestSuite) TestReadBlock_returns404ForMisalignedOffset(t *C) {
 		Name: "child",
 		Mode: 755,
 	}, graph.BLOCK_SIZE)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	offset := 1
 	req := suite.request(api.ReadBlock.Build(id, offset), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
-	assert.Contains(t, msg(resp), fmt.Sprintf("Block at offset %d not found", offset))
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
+	t.Check(msg(resp), Contains, fmt.Sprintf("Block at offset %d not found", offset))
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns400ForJunkOffset(t *C) {
@@ -581,16 +573,16 @@ func (suite *ApiTestSuite) TestReadBlock_returns400ForJunkOffset(t *C) {
 		Name: "child",
 		Mode: 755,
 	}, graph.BLOCK_SIZE)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	offset := "junk"
 	req := suite.request(api.ReadBlock.Build(id, offset), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Contains(t, msg(resp), fmt.Sprintf("Invalid offset parameter: %s", offset))
+	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
+	t.Check(msg(resp), Contains, fmt.Sprintf("Invalid offset parameter: %s", offset))
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns404WhenBlockDoesntExist(t *C) {
@@ -598,16 +590,16 @@ func (suite *ApiTestSuite) TestReadBlock_returns404WhenBlockDoesntExist(t *C) {
 		Name: "child.txt",
 		Mode: 755,
 	})
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	offset := 0
 	req := suite.request(api.ReadBlock.Build(id, offset), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusNotFound, resp.StatusCode)
-	assert.Contains(t, msg(resp), fmt.Sprintf("Block at offset %d not found", offset))
+	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
+	t.Check(msg(resp), Contains, fmt.Sprintf("Block at offset %d not found", offset))
 }
 
 func (suite *ApiTestSuite) TestReadBlock_redirectsWhenBlockFound(t *C) {
@@ -615,16 +607,16 @@ func (suite *ApiTestSuite) TestReadBlock_redirectsWhenBlockFound(t *C) {
 		Name: "child",
 		Mode: 755,
 	}, graph.MEGABYTE)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
 	offset := 0
 	req := suite.request(api.ReadBlock.Build(id, offset), nil)
 
 	resp, err := suite.client.Do(req)
-	assert.NoError(t, err)
+	t.Check(err, IsNil)
 
-	assert.EqualValues(t, http.StatusOK, resp.StatusCode)
-	assert.EqualValues(t, graph.MEGABYTE, resp.ContentLength)
+	t.Check(resp.StatusCode, Equals, http.StatusOK)
+	t.Check(resp.ContentLength, Equals, int64(graph.MEGABYTE))
 }
 
 // Helpers
