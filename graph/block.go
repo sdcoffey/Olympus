@@ -59,9 +59,6 @@ func Write(hash string, d []byte) (int, error) {
 			return 0, err
 		}
 	} else {
-		syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
-		defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-
 		buf := bytes.NewBuffer([]byte(d))
 		n, err := io.Copy(file, buf)
 		return int(n), err
