@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"time"
 
-	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
+	. "gopkg.in/check.v1"
 )
 
 func (suite *GraphTestSuite) TestReader_returnsCorrectReader(t *C) {

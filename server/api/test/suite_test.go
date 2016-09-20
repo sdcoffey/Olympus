@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	"github.com/sdcoffey/olympus/server/api"
+	. "gopkg.in/check.v1"
 )
 
 func init() {

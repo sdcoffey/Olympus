@@ -6,10 +6,10 @@ import (
 
 	"time"
 
-	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	. "github.com/sdcoffey/olympus/testutils"
+	. "gopkg.in/check.v1"
 )
 
 func (suite *ApiClientTestSuite) TestApiClient_ListNodes_returnsEmptyListWhenNoNodes(t *C) {

@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/codegangsta/cli"
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/wsxiaoys/terminal/color"
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/cheggaaa/pb.v1"
+	"github.com/codegangsta/cli"
+	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/client/shared"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
+	"github.com/wsxiaoys/terminal/color"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 var (

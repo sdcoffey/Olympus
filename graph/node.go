@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley/graph"
+	"github.com/google/cayley"
+	"github.com/google/cayley/graph"
 	"github.com/sdcoffey/olympus/util"
 )
 

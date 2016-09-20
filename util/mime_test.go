@@ -1,7 +1,7 @@
 package util
 
 import (
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 

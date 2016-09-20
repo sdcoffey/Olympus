@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEncoderFromHeader_returnsCorrectEncoder(t *testing.T) {

@@ -11,11 +11,11 @@ import (
 	"os"
 	"time"
 
-	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	"github.com/sdcoffey/olympus/server/api"
 	. "github.com/sdcoffey/olympus/testutils"
+	. "gopkg.in/check.v1"
 )
 
 func (suite *ApiTestSuite) TestListNodes_returns404IfFileNotExist(t *C) {

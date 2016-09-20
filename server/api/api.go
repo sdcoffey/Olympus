@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/util"

@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/sdcoffey/olympus/env"
 )

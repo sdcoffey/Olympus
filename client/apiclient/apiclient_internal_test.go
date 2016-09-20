@@ -6,8 +6,8 @@ import (
 	"encoding/xml"
 	"testing"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/sdcoffey/olympus/server/api"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestApiClient_TestEncoder_returnsCorrectEncoder(t *testing.T) {

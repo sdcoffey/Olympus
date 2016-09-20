@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/sdcoffey/olympus/Godeps/_workspace/src/gopkg.in/check.v1"
+	. "gopkg.in/check.v1"
 )
 
 func init() {

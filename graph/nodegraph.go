@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/google/cayley"
-	"github.com/sdcoffey/olympus/Godeps/_workspace/src/github.com/pborman/uuid"
+	"github.com/google/cayley"
+	"github.com/pborman/uuid"
 	"github.com/sdcoffey/olympus/util"
 )
 
