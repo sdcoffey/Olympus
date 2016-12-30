@@ -5,16 +5,16 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/cayley"
+	"github.com/cayleygraph/cayley"
+	"github.com/cayleygraph/cayley/quad"
+	. "github.com/sdcoffey/olympus/checkers"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	. "gopkg.in/check.v1"
 )
 
 func (suite *GraphTestSuite) TestNode_NodeInfo(t *C) {
-	now := time.Now()
-
-	child, err := makeNode("child.txt", suite.ng.RootNode.Id, now, suite.ng)
+	child, err := suite.ng.NewNode("child.txt", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
 
 	info := child.NodeInfo()
@@ -22,30 +22,30 @@ func (suite *GraphTestSuite) TestNode_NodeInfo(t *C) {
 	t.Check(info.ParentId, Equals, graph.RootNodeId)
 	t.Check(info.Name, Equals, "child.txt")
 	t.Check(info.Type, Equals, "text/plain")
-	t.Check(info.MTime.Unix(), Equals, now.Unix())
+	t.Check(info.MTime, WithinNow, time.Second)
 	t.Check(info.Mode, Equals, child.Mode())
 }
 
 func (suite *GraphTestSuite) TestName_returnsName(t *C) {
-	node, err := suite.ng.NewNode("A cool folder", graph.RootNodeId)
+	node, err := suite.ng.NewNode("A cool folder", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 	t.Check(node.Name(), Equals, "A cool folder")
 }
 
 func (suite *GraphTestSuite) TestExists_returnsTrueIfName(t *C) {
-	node, err := suite.ng.NewNode("name", graph.RootNodeId)
+	node, err := suite.ng.NewNode("name", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 	t.Check(node.Exists(), Equals, true)
 }
 
 func (suite *GraphTestSuite) TestType(t *C) {
-	node, err := suite.ng.NewNode("style.css", graph.RootNodeId)
+	node, err := suite.ng.NewNode("style.css", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 	t.Check(node.Type(), Equals, "text/css")
 }
 
 func (suite *GraphTestSuite) TestSize(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	t.Check(node.WriteData(testutils.RandDat(graph.MEGABYTE), 0), IsNil)
@@ -55,39 +55,38 @@ func (suite *GraphTestSuite) TestSize(t *C) {
 }
 
 func (suite *GraphTestSuite) TestMode(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
-	t.Check(node.Chmod(os.ModeDir), IsNil)
+	t.Check(node.SetMode(os.ModeDir), IsNil)
 	t.Check(node.Mode(), Equals, os.ModeDir)
 }
 
 func (suite *GraphTestSuite) TestIsDir_returnsTrueForCorrectMode(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
-	t.Check(node.Chmod(os.ModeDir), IsNil)
 	t.Check(node.IsDir(), Equals, true)
 }
 
 func (suite *GraphTestSuite) TestIsDir_returnsFalseForIncorrectMode(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
-	t.Check(node.Chmod(123), IsNil)
+	t.Check(node.SetMode(123), IsNil)
 	t.Check(node.IsDir(), Equals, false)
 }
 
 func (suite *GraphTestSuite) TestModTime(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
-	t.Check(time.Now().Sub(node.MTime()) < time.Second, Equals, true)
+	t.Check(time.Now().Sub(node.MTime()) < time.Second, IsTrue)
 }
 
 func (suite *GraphTestSuite) TestChildren_returnsCorrectChildren(t *C) {
-	_, err := suite.ng.NewNode("child1", graph.RootNodeId)
+	_, err := suite.ng.NewNode("child1", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
-	childNode2, err := suite.ng.NewNode("child2", graph.RootNodeId)
+	childNode2, err := suite.ng.NewNode("child2", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
-	t.Check(childNode2.Chmod(os.ModeDir), IsNil)
+	t.Check(childNode2.SetMode(os.ModeDir), IsNil)
 
 	children := suite.ng.RootNode.Children()
 	t.Check(children, HasLen, 2)
@@ -101,7 +100,7 @@ func (suite *GraphTestSuite) TestChildren_returnsCorrectChildren(t *C) {
 		}
 	}
 
-	_, err = suite.ng.NewNode("child3", childNode2.Id)
+	_, err = suite.ng.NewNode("child3", childNode2.Id, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	children = childNode2.Children()
@@ -114,7 +113,7 @@ func (suite *GraphTestSuite) TestParent(t *C) {
 	rootNode := suite.ng.RootNode
 	t.Check(rootNode.Parent(), IsNil)
 
-	childNode, err := suite.ng.NewNode("child", graph.RootNodeId)
+	childNode, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	t.Check(childNode.Parent().Id, Matches, rootNode.Id)
@@ -122,44 +121,9 @@ func (suite *GraphTestSuite) TestParent(t *C) {
 	t.Check(childNode.Parent().Mode(), Equals, rootNode.Mode())
 }
 
-func (suite *GraphTestSuite) TestSave(t *C) {
-	mTime := time.Now()
-	ni := graph.NodeInfo{
-		Name:     "child",
-		ParentId: graph.RootNodeId,
-		Mode:     os.FileMode(0755),
-		MTime:    mTime,
-		Type:     "application/json",
-	}
-
-	node, err := suite.ng.NewNodeWithNodeInfo(ni)
-	t.Check(err, IsNil)
-
-	assertProperty := func(expected string, actual cayley.Iterator) {
-		t.Check(cayley.RawNext(actual), Equals, true)
-		t.Check(suite.ng.NameOf(actual.Result()), Equals, expected)
-	}
-
-	it := cayley.StartPath(suite.ng, node.Id).Out("isNamed").BuildIterator()
-	assertProperty("child", it)
-
-	it = cayley.StartPath(suite.ng, node.Id).Out("hasMTime").BuildIterator()
-	assertProperty(mTime.Format(time.RFC3339Nano), it)
-
-	it = cayley.StartPath(suite.ng, node.Id).Out("hasMode").BuildIterator()
-	assertProperty(fmt.Sprint(0755), it)
-
-	it = cayley.StartPath(suite.ng, node.Id).Out("hasType").BuildIterator()
-	assertProperty("application/json", it)
-}
-
-func (suite *GraphTestSuite) TestSave_returnsErrorWhenFileHasNoName(t *C) {
-	_, err := suite.ng.NewNode("", graph.RootNodeId)
-	t.Check(err, ErrorMatches, "Cannot add nameless file")
-}
-
 func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
-	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
 	dat := testutils.RandDat(1024)
 	fingerprint := graph.Hash(dat)
 
@@ -173,14 +137,26 @@ func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
 }
 
 func (suite *GraphTestSuite) TestWriteData_throwsOnInvalidBlockOffset(t *C) {
-	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
 	dat := testutils.RandDat(1024)
 
 	t.Check(child.WriteData(dat, 1), ErrorMatches, fmt.Sprint("1 is not a valid offset for block size ", graph.BLOCK_SIZE))
 }
 
+func (suite *GraphTestSuite) TestWriteData_throwsIfNodeIsDir(t *C) {
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.ModeDir)
+	t.Check(err, IsNil)
+
+	dat := testutils.RandDat(graph.BLOCK_SIZE)
+	err = child.WriteData(dat, 0)
+
+	t.Check(err, ErrorMatches, "Cannot write data to directory")
+}
+
 func (suite *GraphTestSuite) TestWriteData_removesExistingFingerprintForOffset(t *C) {
-	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
 	dat := testutils.RandDat(1024)
 
 	t.Check(child.WriteData(dat, 0), IsNil)
@@ -189,13 +165,15 @@ func (suite *GraphTestSuite) TestWriteData_removesExistingFingerprintForOffset(t
 	fingerprint := graph.Hash(dat)
 	t.Check(child.WriteData(dat, 0), IsNil)
 
-	it := cayley.StartPath(suite.ng, child.Id).Out("offset-0").BuildIterator()
-	t.Check(cayley.RawNext(it), Equals, true)
-	t.Check(suite.ng.NameOf(it.Result()), Equals, fingerprint)
+	it := cayley.StartPath(suite.ng, quad.String(child.Id)).Out("offset-0").BuildIterator()
+	t.Check(it.Next(), Equals, true)
+	t.Check(quad.NativeOf(suite.ng.NameOf(it.Result())), Equals, fingerprint)
 }
 
 func (suite *GraphTestSuite) TestWriteData_SizeChanges(t *C) {
-	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
 	dat := testutils.RandDat(graph.BLOCK_SIZE)
 	t.Check(child.WriteData(dat, 0), IsNil)
 
@@ -207,7 +185,9 @@ func (suite *GraphTestSuite) TestWriteData_SizeChanges(t *C) {
 }
 
 func (suite *GraphTestSuite) TestBlockWithOffset_findsCorrectBlock(t *C) {
-	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
 	data := testutils.RandDat(graph.MEGABYTE)
 	t.Check(child.WriteData(data, 0), IsNil)
 
@@ -232,7 +212,7 @@ func (suite *GraphTestSuite) TestBlocks_returnsEmptySliceForDir(t *C) {
 }
 
 func (suite *GraphTestSuite) TestBlocks_returnsCorrectBlocks(t *C) {
-	child, err := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	block1 := testutils.RandDat(graph.MEGABYTE)
@@ -252,44 +232,52 @@ func (suite *GraphTestSuite) TestBlocks_returnsCorrectBlocks(t *C) {
 }
 
 func (suite *GraphTestSuite) TestChmod_chmodsSuccessfully(t *C) {
-	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
-	t.Check(child.Chmod(os.FileMode(0777)), IsNil)
+
+	t.Check(child.SetMode(os.FileMode(0777)), IsNil)
 	t.Check(child.Mode(), Equals, os.FileMode(0777))
 }
 
-func (suite *GraphTestSuite) TestRename_renamesSuccessfully(t *C) {
-	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
+func (suite *GraphTestSuite) TestSetName_SetsNameSuccessfully(t *C) {
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
+
 	t.Check(child.Name(), Equals, "child")
 
-	t.Check(child.Rename("child_renamed"), IsNil)
+	t.Check(child.SetName("child_renamed"), IsNil)
 	t.Check(child.Name(), Equals, "child_renamed")
 }
 
-func (suite *GraphTestSuite) TestRename_changesType(t *C) {
-	child, err := makeNode("child.txt", graph.RootNodeId, time.Now(), suite.ng)
+func (suite *GraphTestSuite) TestSetName_returnsErrorWhenFileHasNoName(t *C) {
+	nd, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
-	t.Check("child.txt", Equals, child.Name())
-	t.Check("text/plain", Equals, child.Type())
+	err = nd.SetName("")
+	t.Check(err, ErrorMatches, ".*name cannot be blank")
+}
 
-	t.Check(child.Rename("child.json"), IsNil)
-	t.Check("child.json", Equals, child.Name())
-	t.Check("application/json", Equals, child.Type())
+func (suite *GraphTestSuite) TestSetName_throwsIfRenamingRootNode(t *C) {
+	err := suite.ng.RootNode.SetName("notRoot")
+	t.Check(err, ErrorMatches, "^.*cannot rename root node")
+}
+
+func (suite *GraphTestSuite) TestSetName_throwsIfSiblingWithSameName(t *C) {
+	_, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	child2, err := suite.ng.NewNode("child2", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	err = child2.SetName("child")
+	t.Check(err, ErrorMatches, "^.*Node with name .* already exists in .*$")
 }
 
 func (suite *GraphTestSuite) TestMove_movesSuccessfully(t *C) {
-	folder, err := suite.ng.CreateDirectory(graph.RootNodeId, "folder1")
+	folder, err := suite.ng.NewNode("folder1", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
 
-	nodeInfo := graph.NodeInfo{
-		Name:     "child.txt",
-		ParentId: graph.RootNodeId,
-		Mode:     0755,
-	}
-
-	child, err := suite.ng.NewNodeWithNodeInfo(nodeInfo)
+	child, err := suite.ng.NewNode("child.txt", graph.RootNodeId, os.FileMode(0755))
 
 	t.Check(child.Parent().Id, Equals, graph.RootNodeId)
 
@@ -298,45 +286,85 @@ func (suite *GraphTestSuite) TestMove_movesSuccessfully(t *C) {
 }
 
 func (suite *GraphTestSuite) TestMove_throwsIfMovingRootNode(t *C) {
-	folder, _ := suite.ng.CreateDirectory(graph.RootNodeId, "folder")
-	t.Check(suite.ng.RootNode.Move(folder.Id), ErrorMatches, "Cannot move root node")
+	folder, _ := suite.ng.NewNode("folder", graph.RootNodeId, os.ModeDir)
+	t.Check(suite.ng.RootNode.Move(folder.Id), ErrorMatches, "^.*Cannot move root node")
 }
 
 func (suite *GraphTestSuite) TestMove_throwsIfMovingNodeInsideItself(t *C) {
-	folder, _ := suite.ng.CreateDirectory(graph.RootNodeId, "folder")
-	nestedFolder, _ := suite.ng.CreateDirectory(folder.Id, "_folder")
+	folder, _ := suite.ng.NewNode("folder", graph.RootNodeId, os.ModeDir)
+	nestedFolder, _ := suite.ng.NewNode("_folder", folder.Id, os.FileMode(0755))
 
-	t.Check(folder.Move(folder.Id), ErrorMatches, "Cannot move node inside itself")
+	t.Check(folder.Move(folder.Id), ErrorMatches, ".*Cannot move node inside itself")
 
 	// Also shouldn't be able to move a folder into one of it's children
-	t.Check(folder.Move(nestedFolder.Id), ErrorMatches, "Cannot move node inside itself")
+	t.Check(folder.Move(nestedFolder.Id), ErrorMatches, ".*Cannot move node inside itself")
 }
 
-func (suite *GraphTestSuite) TestChmod_throwsIfNewModeIsDirAndHasSize(t *C) {
-	child, err := makeNode("child", graph.RootNodeId, time.Now(), suite.ng)
-	t.Check(err, IsNil)
-	t.Check(child.WriteData(testutils.RandDat(graph.MEGABYTE), 0), IsNil)
+func (suite *GraphTestSuite) TestMove_throwsIfMovingFolderIntoNonDir(t *C) {
+	node1, _ := suite.ng.NewNode("node", graph.RootNodeId, os.FileMode(0755))
+	node2, _ := suite.ng.NewNode("node2", graph.RootNodeId, os.FileMode(0755))
 
-	t.Check(child.Chmod(os.ModeDir), ErrorMatches, "File has size, cannot change to directory")
+	err := node2.Move(node1.Id)
+	t.Check(err, ErrorMatches, ".*Cannot add node to a non-directory")
+}
+
+func (suite *GraphTestSuite) TestMove_throwsIfParentDoesNotExist(t *C) {
+	node, err := suite.ng.NewNode("node", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	err = node.Move("not-an-id")
+	t.Check(err, ErrorMatches, ".*Parent does not exist")
+}
+
+func (suite *GraphTestSuite) TestMove_returnsAnErrorWhenDuplicateSiblingExists(t *C) {
+	firstChild, err := suite.ng.NewNode("firstChild", graph.RootNodeId, os.ModeDir)
+	t.Check(err, IsNil)
+
+	secondChild, err := suite.ng.NewNode("firstChild", firstChild.Id, os.ModeDir)
+	t.Check(err, IsNil)
+
+	err = secondChild.Move(graph.RootNodeId)
+	t.Check(err, ErrorMatches, "^.*Node with name .* already exists in root")
+}
+
+func (suite *GraphTestSuite) TestSetMode_throwsIfNewModeIsDirAndHasSize(t *C) {
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	t.Check(child.WriteData(testutils.RandDat(graph.MEGABYTE), 0), IsNil)
+	t.Check(child.SetMode(os.ModeDir), ErrorMatches, "File has size, cannot change to directory")
+}
+
+func (suite *GraphTestSuite) TestTouch_ignoredIfTimeIsZero(t *C) {
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	err = child.Touch(time.Time{})
+	t.Check(err, IsNil)
+
+	t.Check(child.MTime(), WithinNow, time.Second)
 }
 
 func (suite *GraphTestSuite) TestTouch_updatesMTime(t *C) {
-	then := time.Now().Add(-10 * time.Second)
-	child, _ := makeNode("child", suite.ng.RootNode.Id, then, suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
 
-	now := time.Now()
-	t.Check(child.Touch(now), IsNil)
-	t.Check(child.MTime().Unix(), Equals, now.Unix())
+	then := time.Now().Add(-10 * time.Second)
+	t.Check(child.Touch(then), IsNil)
+	t.Check(child.MTime(), EqualTime, then, time.Second)
 }
 
 func (suite *GraphTestSuite) TestTouch_throwsIfDateInFuture(t *C) {
-	child, err := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
+
 	t.Check(child.Touch(time.Now().Add(time.Second)), ErrorMatches, "Cannot set modified time in the future")
 }
 
 func (suite *GraphTestSuite) TestNodeSeeker_readsCorrectData(t *C) {
-	child, _ := makeNode("child", suite.ng.RootNode.Id, time.Now(), suite.ng)
+	child, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
 	dat := testutils.RandDat(1024)
 
 	t.Check(child.WriteData(dat, 0), IsNil)
@@ -362,14 +390,9 @@ func (suite *GraphTestSuite) TestNodeSeeker_readsCorrectData(t *C) {
 
 func (suite *GraphTestSuite) BenchmarkWrite(t *C) {
 	var err error
-	var info graph.NodeInfo
 
-	info.ParentId = graph.RootNodeId
-	info.Mode = os.FileMode(0755)
-	info.Type = "application/json"
 	for i := 0; err == nil && i < t.N; i++ {
-		info.Name = fmt.Sprint(i)
-		_, err = suite.ng.NewNodeWithNodeInfo(info)
+		_, err = suite.ng.NewNode(fmt.Sprint(i), graph.RootNodeId, os.FileMode(0755))
 	}
 
 	if err != nil {
@@ -378,7 +401,7 @@ func (suite *GraphTestSuite) BenchmarkWrite(t *C) {
 }
 
 func (suite *GraphTestSuite) BenchmarkName(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	t.ResetTimer()
@@ -388,7 +411,7 @@ func (suite *GraphTestSuite) BenchmarkName(t *C) {
 }
 
 func (suite *GraphTestSuite) BenchmarkSize(t *C) {
-	node, err := suite.ng.NewNode("child", graph.RootNodeId)
+	node, err := suite.ng.NewNode("child", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	for i := 0; i < 10; i++ {
@@ -399,19 +422,5 @@ func (suite *GraphTestSuite) BenchmarkSize(t *C) {
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
 		node.Size()
-	}
-}
-
-func makeNode(name, parentId string, mTime time.Time, ng *graph.NodeGraph) (*graph.Node, error) {
-	nodeInfo := graph.NodeInfo{
-		Name:     name,
-		ParentId: parentId,
-		MTime:    mTime,
-		Mode:     0755,
-	}
-	if node, err := ng.NewNodeWithNodeInfo(nodeInfo); err != nil {
-		return nil, err
-	} else {
-		return node, nil
 	}
 }

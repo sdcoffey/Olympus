@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/cayley"
+	"github.com/cayleygraph/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
@@ -77,12 +77,14 @@ func (t *ModelTestSuite) TestModel_Refresh_RemovesLocalItemsDeletedRemotely(c *C
 		_, err := t.client.CreateNode(graph.NodeInfo{
 			ParentId: graph.RootNodeId,
 			Name:     fmt.Sprint(i),
+			Mode:     os.FileMode(0755),
 		})
 		c.Check(err, IsNil)
 	}
 
 	err := model.init()
 	c.Check(err, IsNil)
+
 	c.Check(3, Equals, len(model.Root.Children()))
 	children := model.graph.NodeWithId(graph.RootNodeId).Children()
 	err = t.client.RemoveNode(children[0].Id)

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/cayley"
-	cgraph "github.com/google/cayley/graph"
-	_ "github.com/google/cayley/graph/bolt"
+	"github.com/cayleygraph/cayley"
+	cgraph "github.com/cayleygraph/cayley/graph"
+	_ "github.com/cayleygraph/cayley/graph/bolt"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
 )

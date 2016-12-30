@@ -6,9 +6,9 @@ import (
 
 	"time"
 
+	. "github.com/sdcoffey/olympus/checkers"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
-	. "github.com/sdcoffey/olympus/testutils"
 	. "gopkg.in/check.v1"
 )
 
@@ -19,10 +19,10 @@ func (suite *ApiClientTestSuite) TestApiClient_ListNodes_returnsEmptyListWhenNoN
 }
 
 func (suite *ApiClientTestSuite) TestApiClient_ListNodes_returnsNodes(t *C) {
-	_, err := suite.ng.CreateDirectory(graph.RootNodeId, "child1")
+	_, err := suite.ng.NewNode("child1", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
 
-	_, err = suite.ng.CreateDirectory(graph.RootNodeId, "child2")
+	_, err = suite.ng.NewNode("child2", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
 
 	nodes, err := suite.client.ListNodes(graph.RootNodeId)
@@ -40,11 +40,7 @@ func (suite *ApiClientTestSuite) TestApiClient_ListNodes_returnsNodes(t *C) {
 }
 
 func (suite *ApiClientTestSuite) TestApiClient_ListBlocks_listsBlocks(t *C) {
-	node, err := suite.ng.NewNodeWithNodeInfo(graph.NodeInfo{
-		ParentId: graph.RootNodeId,
-		Name:     "thing.txt",
-		Mode:     0755,
-	})
+	node, err := suite.ng.NewNode("thing.txt", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	dat1 := testutils.RandDat(graph.MEGABYTE)
@@ -65,11 +61,7 @@ func (suite *ApiClientTestSuite) TestApiClient_ListBlocks_listsBlocks(t *C) {
 }
 
 func (suite *ApiClientTestSuite) TestApiClient_WriteBlock_writesBlock(t *C) {
-	node, err := suite.ng.NewNodeWithNodeInfo(graph.NodeInfo{
-		ParentId: graph.RootNodeId,
-		Name:     "thing.txt",
-		Mode:     0755,
-	})
+	node, err := suite.ng.NewNode("thing.txt", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	dat := testutils.RandDat(graph.MEGABYTE)
@@ -85,11 +77,7 @@ func (suite *ApiClientTestSuite) TestApiClient_WriteBlock_writesBlock(t *C) {
 }
 
 func (suite *ApiClientTestSuite) TestApiClient_RemoveNode_removesNode(t *C) {
-	node, err := suite.ng.NewNodeWithNodeInfo(graph.NodeInfo{
-		ParentId: graph.RootNodeId,
-		Name:     "thing.txt",
-		Mode:     0755,
-	})
+	node, err := suite.ng.NewNode("thing.txt", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	t.Check(suite.client.RemoveNode(node.Id), IsNil)
@@ -108,15 +96,11 @@ func (suite *ApiClientTestSuite) TestApiClient_CreateNode_createsNode(t *C) {
 	createdNode := suite.ng.NodeWithId(returnedNodeInfo.Id)
 	t.Check(createdNode.Name(), Equals, nodeInfo.Name)
 	t.Check(createdNode.Mode(), Equals, os.FileMode(0755))
-	t.Check(time.Now().Sub(createdNode.MTime()) < time.Second, IsTrue)
+	t.Check(time.Now().UTC().Sub(createdNode.MTime()) < time.Second, IsTrue)
 }
 
 func (suite *ApiClientTestSuite) TestApiClient_UpdateNode_updatesNode(t *C) {
-	node, err := suite.ng.NewNodeWithNodeInfo(graph.NodeInfo{
-		ParentId: graph.RootNodeId,
-		Name:     "thing.txt",
-		Mode:     0755,
-	})
+	node, err := suite.ng.NewNode("thing.txt", graph.RootNodeId, os.FileMode(0755))
 	t.Check(err, IsNil)
 
 	info := node.NodeInfo()

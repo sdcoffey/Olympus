@@ -44,28 +44,27 @@ func (model *Model) Refresh() error {
 		return fmt.Errorf("Error listing nodes: %s", err.Error())
 	} else {
 		var err error
+		var curNode *graph.Node
 		for i := 0; i < len(nodeInfos) && err == nil; i++ {
-			node := model.graph.NodeWithNodeInfo(nodeInfos[i])
-			if node.Exists() {
-			} else {
-				if err := model.graph.AddNode(model.Root, node); err != nil {
-					return fmt.Errorf("Error refreshing model: %s", err.Error())
-				}
+			curNode = model.graph.NodeWithId(nodeInfos[i].Id)
+			if err = curNode.Update(nodeInfos[i]); err != nil {
+				break
 			}
-			if _, ok := nodeSet[node.Id]; ok {
-				delete(nodeSet, node.Id)
+			if _, ok := nodeSet[curNode.Id]; ok {
+				delete(nodeSet, curNode.Id)
 			}
 		}
 
 		if err != nil {
-			return err
+			return fmt.Errorf("Error refreshing model: %s", err.Error())
 		}
 	}
 
-	for id, _ := range nodeSet {
-		staleNode := model.graph.NodeWithId(id)
+	var staleNode *graph.Node
+	for id := range nodeSet {
+		staleNode = model.graph.NodeWithId(id)
 		if err := model.graph.RemoveNode(staleNode); err != nil {
-			return err
+			return fmt.Errorf("Error refreshing model: %s", err.Error())
 		}
 	}
 

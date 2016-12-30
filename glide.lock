@@ -1,5 +1,5 @@
-hash: 724963fd26b8e8f8b4ddfe92d75d3b6b0b5228c3811f76825579201b8c5fe16f
-updated: 2016-12-29T15:28:37.701032251-08:00
+hash: 4c3ecf57418ccd2d288ee56e325bb509cdbfd740fb26508036f44df32f4a9d0d
+updated: 2016-12-29T15:33:52.618425983-08:00
 imports:
 - name: github.com/boltdb/bolt
   version: a705895fdad108f053eae7ee011ed94a0541ee13
@@ -24,11 +24,6 @@ imports:
   - gogoproto
   - proto
   - protoc-gen-gogo/descriptor
-- name: github.com/google/cayley
-  version: f03d046d906cc8e207609b4e43788023a669a39c
-  subpackages:
-  - graph
-  - graph/bolt
 - name: github.com/gorilla/context
   version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
 - name: github.com/gorilla/mux
@@ -58,6 +53,8 @@ testImports:
   version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
   subpackages:
   - spew
+- name: github.com/google/cayley
+  version: f03d046d906cc8e207609b4e43788023a669a39c
 - name: github.com/pmezard/go-difflib
   version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
