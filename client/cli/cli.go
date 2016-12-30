@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cayleygraph/cayley"
 	"github.com/codegangsta/cli"
-	"github.com/google/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/client/shared"
 	"github.com/sdcoffey/olympus/graph"

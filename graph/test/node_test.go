@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/cayley"
+	"github.com/cayleygraph/cayley"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	. "gopkg.in/check.v1"

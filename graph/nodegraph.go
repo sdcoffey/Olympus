@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/cayley"
+	"github.com/cayleygraph/cayley"
 	"github.com/pborman/uuid"
 	"github.com/sdcoffey/olympus/util"
 )

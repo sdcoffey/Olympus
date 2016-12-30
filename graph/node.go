@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/cayley"
-	"github.com/google/cayley/graph"
+	"github.com/cayleygraph/cayley"
+	"github.com/cayleygraph/cayley/graph"
 	"github.com/sdcoffey/olympus/util"
+	"github.com/cayleygraph/cayley/quad"
 )
 
 const (
@@ -127,7 +128,13 @@ func (nd *Node) Blocks() []BlockInfo {
 
 	var i int64
 	for i = 0; ; i += BLOCK_SIZE {
-		it := cayley.StartPath(nd.graph, nd.Id).Out(fmt.Sprint("offset-", i)).BuildIterator()
+		path := cayley.StartPath(nd.graph, quad.String(nd.Id)).Out(fmt.Sprint("offset-", i))
+		path.Iterate(nil).Limit(1).Each(func(val graph.Value) {
+			info := BlockInfo{
+				Hash:  quad.StringOf(val),
+				Offset: i,
+			}
+		})
 		if cayley.RawNext(it) {
 			info := BlockInfo{
 				Hash:   nd.graph.NameOf(it.Result()),

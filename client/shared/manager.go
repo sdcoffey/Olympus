@@ -10,7 +10,7 @@ import (
 
 	"fmt"
 
-	"github.com/google/cayley"
+	"github.com/cayleygraph/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/util"
