@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
+	. "github.com/sdcoffey/olympus/checkers"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/graph/testutils"
 	"github.com/sdcoffey/olympus/server/api"
-	. "github.com/sdcoffey/olympus/testutils"
 	. "gopkg.in/check.v1"
 )
 
@@ -30,7 +30,7 @@ func (suite *ApiTestSuite) TestListNodes_returns404IfFileNotExist(t *C) {
 func (suite *ApiTestSuite) TestListNodes_returnsFilesForValidParent(t *C) {
 	endpoint := api.ListNodes.Build(graph.RootNodeId)
 	req := suite.request(endpoint, nil)
-	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child")
+	suite.ng.NewNode("child", graph.RootNodeId, os.ModeDir)
 
 	resp, err := suite.client.Do(req)
 	t.Check(err, IsNil)
@@ -47,8 +47,8 @@ func (suite *ApiTestSuite) TestListNodes_returnsFilesForValidParent(t *C) {
 
 func (suite *ApiTestSuite) TestListNodes_returnsNFilesWhenLimitProvided(t *C) {
 	req := suite.request(api.ListNodes.Build(graph.RootNodeId).Query("limit", "1"), nil)
-	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child1")
-	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child2")
+	suite.ng.NewNode("child1", graph.RootNodeId, os.ModeDir)
+	suite.ng.NewNode("child2", graph.RootNodeId, os.ModeDir)
 
 	resp, err := suite.client.Do(req)
 	t.Check(err, IsNil)
@@ -66,8 +66,8 @@ func (suite *ApiTestSuite) TestListNodes_returnsNFilesWhenLimitProvided(t *C) {
 func (suite *ApiTestSuite) TestListNodes_startsWithNFileWhenWatermarkProvided(t *C) {
 	endpoint := api.ListNodes.Build(graph.RootNodeId).Query("watermark", "1")
 	req := suite.request(endpoint, nil)
-	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child1")
-	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child2")
+	suite.ng.NewNode("child1", graph.RootNodeId, os.ModeDir)
+	suite.ng.NewNode("child2", graph.RootNodeId, os.ModeDir)
 
 	resp, err := suite.client.Do(req)
 	t.Check(err, IsNil)
@@ -199,24 +199,6 @@ func (suite *ApiTestSuite) TestCreateNode_getsTypeFromExtension(t *C) {
 	t.Check(suite.ng.RootNode.Children()[0].Type(), Equals, "text/plain")
 }
 
-func (suite *ApiTestSuite) TestCreateNode_usesTypeInBodyIfProvided(t *C) {
-	ni := graph.NodeInfo{
-		Name: "graph.txt",
-		Mode: 755,
-		Size: 1024,
-		Type: "application/json",
-	}
-
-	endpoint := api.CreateNode.Build(graph.RootNodeId)
-	req := suite.request(endpoint, encode(ni))
-
-	resp, err := suite.client.Do(req)
-	t.Check(err, IsNil)
-	t.Check(resp.StatusCode, Equals, http.StatusCreated)
-
-	t.Check(suite.ng.RootNode.Children()[0].Type(), Equals, "application/json")
-}
-
 func (suite *ApiTestSuite) TestCreateNode_returns400ForJunkData(t *C) {
 	ni := "not real data"
 
@@ -231,7 +213,7 @@ func (suite *ApiTestSuite) TestCreateNode_returns400ForJunkData(t *C) {
 }
 
 func (suite *ApiTestSuite) TestCreateNode_returns400WhenNodeExists(t *C) {
-	suite.ng.CreateDirectory(suite.ng.RootNode.Id, "child")
+	suite.ng.NewNode("child", graph.RootNodeId, os.ModeDir)
 
 	ni := graph.NodeInfo{
 		Name: "child",
@@ -299,11 +281,12 @@ func (suite *ApiTestSuite) TestUpdateNode_updatesNode(t *C) {
 
 func (suite *ApiTestSuite) TestUpdateNode_ignoresNewSize(t *C) {
 	ni := graph.NodeInfo{
-		Name: "abc.txt",
-		Mode: 0755,
+		ParentId: graph.RootNodeId,
+		Name:     "abc.txt",
+		Mode:     0755,
 	}
 
-	id, err := suite.createNode(suite.ng.RootNode.Id, ni)
+	id, err := suite.createNode(graph.RootNodeId, ni)
 	t.Check(err, IsNil)
 
 	ni.Size = 1024
@@ -334,7 +317,7 @@ func (suite *ApiTestSuite) TestUpdateNode_returns404ForMissingNode(t *C) {
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_movesFileSuccessfully(t *C) {
-	folder, err := suite.ng.CreateDirectory(suite.ng.RootNode.Id, "folder 1")
+	folder, err := suite.ng.NewNode("folder 1", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
 
 	nodeInfo := graph.NodeInfo{
@@ -356,7 +339,7 @@ func (suite *ApiTestSuite) TestUpdateNode_movesFileSuccessfully(t *C) {
 }
 
 func (suite *ApiTestSuite) TestUpdateNode_renameAndMoveWorksSuccessfully(t *C) {
-	folder, err := suite.ng.CreateDirectory(suite.ng.RootNode.Id, "folder 1")
+	folder, err := suite.ng.NewNode("folder 1", graph.RootNodeId, os.ModeDir)
 	t.Check(err, IsNil)
 
 	nodeInfo := graph.NodeInfo{
@@ -384,7 +367,7 @@ func (suite *ApiTestSuite) TestBlocks_listsBlocksForNode(t *C) {
 		Mode: 0755,
 	}
 
-	id, err := suite.createNode(suite.ng.RootNode.Id, ni)
+	id, err := suite.createNode(graph.RootNodeId, ni)
 	t.Check(err, IsNil)
 
 	hash, err := suite.writeBlock(graph.BLOCK_SIZE, 0, id)

@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
 	"time"
 
 	"github.com/cayleygraph/cayley"
+	"github.com/cayleygraph/cayley/quad"
 	"github.com/pborman/uuid"
-	"github.com/sdcoffey/olympus/util"
 )
 
 const RootNodeId = "rootNode"
@@ -22,46 +23,52 @@ func NewGraph(graph *cayley.Handle) (*NodeGraph, error) {
 	ng := &NodeGraph{graph, nil}
 
 	root := new(Node)
-	root.name = "root"
 	root.Id = RootNodeId
-	root.mode |= os.ModeDir
 	root.graph = ng
 
-	ng.RootNode = root
-
-	if err := root.save(); err != nil {
+	if err := graph.AddQuad(cayley.Triple(RootNodeId, nameLink, "root")); err != nil {
 		return nil, err
-	} else {
-		ng.RootNode = root
+	} else if err = graph.AddQuad(cayley.Triple(RootNodeId, modeLink, int(os.ModeDir))); err != nil {
+		return nil, err
+	} else if err = graph.AddQuad(cayley.Triple(RootNodeId, mTimeLink, time.Now().Unix())); err != nil {
+		return nil, err
 	}
+
+	ng.RootNode = root
 
 	return ng, nil
 }
 
-func (ng *NodeGraph) NewNode(name, parentId string) (*Node, error) {
-	node := new(Node)
-	node.parentId = parentId
-	node.Id = uuid.New()
-	node.mTime = time.Now()
-	node.name = name
-	node.graph = ng
+func (ng *NodeGraph) _newNode() *Node {
+	nd := new(Node)
+	nd.Id = uuid.New()
+	nd.graph = ng
 
-	node.mimeType = util.MimeType(name)
-
-	return node, ng.AddNode(ng.NodeWithId(parentId), node)
+	return nd
 }
 
-func (ng *NodeGraph) NewNodeWithNodeInfo(info NodeInfo) (*Node, error) {
-	node := ng.NodeWithNodeInfo(info)
-	node.Id = uuid.New()
+func (ng *NodeGraph) NewNode(name, parentId string, mode os.FileMode) (nd *Node, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			nd = nil
+			err = fmt.Errorf("Error creating new node: %s", err.Error())
+		}
+	}()
 
-	if info.Type != "" {
-		node.mimeType = info.Type
-	} else {
-		node.mimeType = util.MimeType(info.Name)
+	ok := func(err error) {
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	return node, ng.AddNode(ng.NodeWithId(info.ParentId), node)
+	nd = ng._newNode()
+
+	ok(nd.SetName(name))
+	ok(nd.Move(parentId))
+	ok(nd.Touch(time.Now()))
+	ok(nd.SetMode(mode))
+
+	return nd, nil
 }
 
 func (ng *NodeGraph) NodeWithId(id string) *Node {
@@ -69,27 +76,15 @@ func (ng *NodeGraph) NodeWithId(id string) *Node {
 }
 
 func (ng *NodeGraph) NodeWithName(parentId, name string) *Node {
-	namePath := cayley.StartPath(ng, name).In(nameLink)
-	parentpath := cayley.StartPath(ng, parentId).In(parentLink)
+	namePath := cayley.StartPath(ng, quad.String(name)).In(nameLink)
+	parentPath := cayley.StartPath(ng, quad.String(parentId)).In(parentLink)
 
-	it := namePath.And(parentpath).BuildIterator()
-	if cayley.RawNext(it) {
-		return ng.NodeWithId(ng.NameOf(it.Result()))
+	it := namePath.And(parentPath).BuildIterator()
+	if it.Next() {
+		return ng.NodeWithId(quad.NativeOf(ng.NameOf(it.Result())).(string))
 	}
 
 	return nil
-}
-
-func (ng *NodeGraph) NodeWithNodeInfo(info NodeInfo) *Node {
-	node := ng.NodeWithId(info.Id)
-	node.name = info.Name
-	node.mode = os.FileMode(info.Mode)
-	node.mTime = info.MTime
-	node.parentId = info.ParentId
-	node.mimeType = info.Type
-	node.graph = ng
-
-	return node
 }
 
 func (ng *NodeGraph) RemoveNode(nd *Node) (err error) {
@@ -107,28 +102,6 @@ func (ng *NodeGraph) RemoveNode(nd *Node) (err error) {
 	return ng.removeNode(nd)
 }
 
-func (ng *NodeGraph) CreateDirectory(parentId, name string) (*Node, error) {
-	var info NodeInfo
-	info.ParentId = parentId
-	info.Mode = os.ModeDir
-	info.Name = name
-
-	return ng.NewNodeWithNodeInfo(info)
-}
-
-func (ng *NodeGraph) AddNode(parent, child *Node) error {
-	if parent == nil || !parent.Exists() {
-		return fmt.Errorf("Parent %s does not exist", parent.Id)
-	} else if !parent.IsDir() {
-		return errors.New("Cannot add node to a non-directory")
-	} else if parent.Exists() && ng.NodeWithName(parent.Id, child.name) != nil {
-		return fmt.Errorf("Node with name %s already exists in %s", child.name, parent.Name())
-	}
-
-	child.parentId = parent.Id
-	return child.save()
-}
-
 func (ng *NodeGraph) removeNode(nd *Node) (err error) {
 	if len(nd.Children()) > 0 {
 		return errors.New("Can't delete node with children, must delete children first")
@@ -136,30 +109,17 @@ func (ng *NodeGraph) removeNode(nd *Node) (err error) {
 
 	transaction := cayley.NewTransaction()
 	if nd.Mode() > 0 {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, modeLink, fmt.Sprint(int(nd.Mode())), ""))
+		transaction.RemoveQuad(cayley.Triple(nd.Id, modeLink, int(nd.Mode())))
 	}
 	if !nd.MTime().IsZero() {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, mTimeLink, fmt.Sprint(nd.MTime().Format(timeFormat)), ""))
+		transaction.RemoveQuad(cayley.Triple(nd.Id, mTimeLink, nd.MTime().Unix()))
 	}
 	if nd.Name() != "" {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, nameLink, nd.Name(), ""))
+		transaction.RemoveQuad(cayley.Triple(nd.Id, nameLink, nd.Name()))
 	}
 	if nd.Parent() != nil {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, parentLink, nd.Parent().Id, ""))
-	}
-	if nd.Type() != "" {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, typeLink, nd.Type(), ""))
+		transaction.RemoveQuad(cayley.Triple(nd.Id, parentLink, nd.Parent().Id))
 	}
 
-	err = ng.ApplyTransaction(transaction)
-
-	if err == nil {
-		nd.mode = os.FileMode(0)
-		nd.mTime = time.Time{}
-		nd.name = ""
-		nd.parentId = ""
-		nd.Id = ""
-	}
-
-	return
+	return ng.ApplyTransaction(transaction)
 }

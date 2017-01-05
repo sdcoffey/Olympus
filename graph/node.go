@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/cayleygraph/cayley"
 	"github.com/cayleygraph/cayley/graph"
-	"github.com/sdcoffey/olympus/util"
+	"github.com/cayleygraph/cayley/graph/path"
 	"github.com/cayleygraph/cayley/quad"
+	"github.com/sdcoffey/olympus/util"
 )
 
 const (
@@ -19,28 +19,19 @@ const (
 	nameLink   = "isNamed"
 	modeLink   = "hasMode"
 	mTimeLink  = "hasMTime"
-	typeLink   = "hasType"
-
-	timeFormat = time.RFC3339Nano
 )
 
-type NTree interface {
-	Parent() NTree
-	Children() []NTree
-}
-
 type Node struct {
-	Id       string
-	graph    *NodeGraph
-	parentId string
-	name     string
-	mTime    time.Time
-	mode     os.FileMode
-	mimeType string
+	Id    string
+	graph *NodeGraph
 }
 
 func (nd *Node) Name() string {
-	return nd.graphValue(nameLink)
+	if val := nd.graphValue(nameLink); val != nil {
+		return val.(string)
+	} else {
+		return ""
+	}
 }
 
 func (nd *Node) Size() (sz int64) {
@@ -53,51 +44,49 @@ func (nd *Node) Size() (sz int64) {
 }
 
 func (nd *Node) Mode() os.FileMode {
-	modeString := nd.graphValue(modeLink)
-	if mode, err := strconv.ParseInt(modeString, 10, 64); err != nil {
-		return os.FileMode(0)
+	if val := nd.graphValue(modeLink); val != nil {
+		return os.FileMode(val.(int))
 	} else {
-		return os.FileMode(mode)
+		return os.FileMode(0)
 	}
 }
 
 func (nd *Node) MTime() time.Time {
-	timeString := nd.graphValue(mTimeLink)
-	if t, err := time.Parse(timeFormat, timeString); err != nil {
-		return time.Time{}
+	if val := nd.graphValue(mTimeLink); val != nil {
+		return time.Unix(int64(val.(int)), 0)
 	} else {
-		return t
+		return time.Time{}
 	}
 }
 
 func (nd *Node) Type() string {
-	return nd.graphValue(typeLink)
+	return util.MimeType(nd.Name())
 }
 
+// Convenience method determining whether this node is a directory or not.
 func (nd *Node) IsDir() bool {
 	return nd.Mode()&os.ModeDir > 0
 }
 
-// interface NTree
+// Return the logical parent of this node, i.e. the node id with an incoming parent edge from this node.
 func (nd *Node) Parent() *Node {
-	var parentId string
-	if parentId = nd.graphValue(parentLink); parentId == "" {
+	if val := nd.graphValue(parentLink); val != nil {
+		return nd.graph.NodeWithId(val.(string))
+	} else {
 		return nil
 	}
-
-	return nd.graph.NodeWithId(parentId)
 }
 
+// Return the logical children of this node, i.e, all nodes from which an incoming edge is pointed at this node.
 func (nd *Node) Children() []*Node {
 	if !nd.IsDir() {
 		return make([]*Node, 0)
 	}
 
-	it := cayley.StartPath(nd.graph, nd.Id).In(parentLink).BuildIterator()
+	it := path.StartPath(nd.graph, quad.String(nd.Id)).In(parentLink).BuildIterator()
 	children := make([]*Node, 0, 10)
-	for cayley.RawNext(it) {
-		child := nd.graph.NodeWithId(nd.graph.NameOf(it.Result()))
-		child.parentId = nd.Id
+	for it.Next() {
+		child := nd.graph.NodeWithId(quad.NativeOf(nd.graph.NameOf(it.Result())).(string))
 		children = append(children, child)
 	}
 
@@ -111,9 +100,9 @@ func (nd *Node) BlockWithOffset(offset int64) string {
 		return ""
 	}
 
-	it := cayley.StartPath(nd.graph, nd.Id).Out(fmt.Sprint("offset-", offset)).BuildIterator()
-	if cayley.RawNext(it) {
-		return nd.graph.NameOf(it.Result())
+	it := path.StartPath(nd.graph, quad.String(nd.Id)).Out(fmt.Sprint("offset-", offset)).BuildIterator()
+	if it.Next() {
+		return quad.NativeOf(nd.graph.NameOf(it.Result())).(string)
 	} else {
 		return ""
 	}
@@ -128,21 +117,15 @@ func (nd *Node) Blocks() []BlockInfo {
 
 	var i int64
 	for i = 0; ; i += BLOCK_SIZE {
-		path := cayley.StartPath(nd.graph, quad.String(nd.Id)).Out(fmt.Sprint("offset-", i))
-		path.Iterate(nil).Limit(1).Each(func(val graph.Value) {
+		it := path.StartPath(nd.graph, quad.String(nd.Id)).Out(fmt.Sprint("offset-", i)).BuildIterator()
+		if it.Next() {
 			info := BlockInfo{
-				Hash:  quad.StringOf(val),
-				Offset: i,
-			}
-		})
-		if cayley.RawNext(it) {
-			info := BlockInfo{
-				Hash:   nd.graph.NameOf(it.Result()),
+				Hash:   quad.NativeOf(nd.graph.NameOf(it.Result())).(string),
 				Offset: i,
 			}
 			blocks = append(blocks, info)
 		} else {
-			return blocks
+			break
 		}
 	}
 
@@ -150,7 +133,9 @@ func (nd *Node) Blocks() []BlockInfo {
 }
 
 func (nd *Node) WriteData(data []byte, offset int64) error {
-	if offset%BLOCK_SIZE != 0 {
+	if nd.IsDir() {
+		return errors.New("Cannot write data to directory")
+	} else if offset%BLOCK_SIZE != 0 {
 		return errors.New(fmt.Sprintf("%d is not a valid offset for block size %d", offset, BLOCK_SIZE))
 	}
 
@@ -160,9 +145,9 @@ func (nd *Node) WriteData(data []byte, offset int64) error {
 	// Determine if we already have a block for this offset
 	linkName := fmt.Sprint("offset-", offset)
 	if existingBlockHash := nd.BlockWithOffset(offset); existingBlockHash != "" {
-		transaction.RemoveQuad(cayley.Quad(nd.Id, linkName, string(existingBlockHash), ""))
+		transaction.RemoveQuad(cayley.Triple(nd.Id, linkName, string(existingBlockHash)))
 	}
-	transaction.AddQuad(cayley.Quad(nd.Id, linkName, hash, ""))
+	transaction.AddQuad(cayley.Triple(nd.Id, linkName, hash))
 
 	if err := nd.graph.ApplyTransaction(transaction); err != nil {
 		return err
@@ -175,67 +160,7 @@ func (nd *Node) WriteData(data []byte, offset int64) error {
 	return nil
 }
 
-func (nd *Node) save() (err error) {
-	if nd.name == "" && nd.Name() == "" {
-		return errors.New("Cannot add nameless file")
-	} else if nd.Parent() == nil && nd.parentId == "" && nd.Id != RootNodeId {
-		return errors.New("Cannot add file without parent")
-	}
-
-	staleQuads := graph.NewTransaction()
-	newQuads := graph.NewTransaction()
-	if name := nd.Name(); nd.name != name && name != "" && nd.name != "" {
-		staleQuads.RemoveQuad(cayley.Quad(nd.Id, nameLink, name, ""))
-	}
-	if nd.name != "" && nd.name != nd.Name() {
-		newQuads.AddQuad(cayley.Quad(nd.Id, nameLink, nd.name, ""))
-		nd.name = ""
-	}
-
-	if mimeType := nd.Type(); nd.mimeType != mimeType && mimeType != "" && nd.mimeType != "" {
-		staleQuads.RemoveQuad(cayley.Quad(nd.Id, typeLink, mimeType, ""))
-	}
-	if nd.mimeType != "" && nd.mimeType != nd.Type() {
-		newQuads.AddQuad(cayley.Quad(nd.Id, typeLink, nd.mimeType, ""))
-		nd.mimeType = ""
-	}
-
-	if mode := int(nd.Mode()); int(nd.mode) != mode && mode != 0 && int(nd.mode) != 0 {
-		staleQuads.RemoveQuad(cayley.Quad(nd.Id, modeLink, fmt.Sprint(mode), ""))
-	}
-	if int(nd.mode) > 0 && nd.mode != nd.Mode() {
-		newQuads.AddQuad(cayley.Quad(nd.Id, modeLink, fmt.Sprint(int(nd.mode)), ""))
-		nd.mode = os.FileMode(0)
-	}
-
-	if mTime := nd.MTime(); nd.mTime != mTime && !mTime.IsZero() && !nd.mTime.IsZero() {
-		staleQuads.RemoveQuad(cayley.Quad(nd.Id, mTimeLink, nd.MTime().Format(timeFormat), ""))
-	}
-	if !nd.mTime.IsZero() && nd.mTime != nd.MTime() {
-		newQuads.AddQuad(cayley.Quad(nd.Id, mTimeLink, nd.mTime.Format(timeFormat), ""))
-		nd.mTime = time.Time{}
-	}
-
-	if parent := nd.Parent(); parent != nil && parent.Id != nd.parentId && nd.parentId != "" {
-		staleQuads.RemoveQuad(cayley.Quad(nd.Id, parentLink, nd.Parent().Id, ""))
-	} else if parent != nil && parent.Id == nd.parentId {
-		nd.parentId = ""
-	}
-	if nd.parentId != "" {
-		newQuads.AddQuad(cayley.Quad(nd.Id, parentLink, nd.parentId, ""))
-		nd.parentId = ""
-	}
-
-	if err = nd.graph.ApplyTransaction(staleQuads); err != nil {
-		return
-	} else if err = nd.graph.ApplyTransaction(newQuads); err != nil {
-		return
-	}
-
-	return nil
-}
-
-func (nd *Node) checkLineage(maybeParentId string) bool {
+func (nd *Node) ancestorOf(maybeParentId string) bool {
 	parent := nd.Parent()
 	for parent != nil {
 		if parent.Id == maybeParentId {
@@ -247,81 +172,91 @@ func (nd *Node) checkLineage(maybeParentId string) bool {
 	return false
 }
 
-func (nd *Node) Move(newParentId string) error {
-	if nd.Parent() == nil {
-		return errors.New("Cannot move root node")
-	} else if newParentId == nd.Id {
-		return errors.New("Cannot move node inside itself")
-	} else if newParentId == "" {
+func (nd *Node) updateProperty(prop string, old, new interface{}) error {
+	if path.StartPath(nd.graph, quad.String(nd.Id)).Out(prop).BuildIterator().Next() {
+		nd.graph.RemoveQuad(cayley.Triple(nd.Id, prop, old))
+	}
+
+	return nd.graph.AddQuad(cayley.Triple(nd.Id, prop, new))
+}
+
+func (nd *Node) SetName(newName string) error {
+	if existingName := nd.Name(); existingName == newName && newName != "" {
 		return nil
-	}
-
-	newParent := nd.graph.NodeWithId(newParentId)
-	if newParent.checkLineage(nd.Id) {
-		return errors.New("Cannot move node inside itself")
-	}
-
-	if err := nd.graph.AddNode(newParent, nd); err != nil {
-		nd.parentId = ""
-		return err
+	} else if nd.Id == RootNodeId {
+		return errors.New("Error updating name: cannot rename root node")
+	} else if newName == "" {
+		return errors.New("Error updating name: name cannot be blank")
+	} else if nd.Parent() != nil && nd.graph.NodeWithName(nd.Parent().Id, newName) != nil {
+		return fmt.Errorf("Error moving node: Node with name %s already exists in %s", nd.Name(), nd.Parent().Name())
+	} else if err := nd.updateProperty(nameLink, existingName, newName); err != nil {
+		return fmt.Errorf("Error setting name: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (nd *Node) Rename(newName string) error {
-	if nd.Name() == newName {
+func (nd *Node) SetMode(newMode os.FileMode) error {
+	if existingMode := nd.Mode(); existingMode == newMode && int(newMode) != 0 {
 		return nil
-	}
-
-	nd.name = newName
-	nd.mimeType = util.MimeType(nd.name)
-	return nd.save()
-}
-
-func (nd *Node) Chmod(newMode os.FileMode) error {
-	if nd.Size() > 0 && newMode.IsDir() {
+	} else if nd.Size() > 0 && newMode.IsDir() {
 		return errors.New("File has size, cannot change to directory")
+	} else if err := nd.updateProperty(modeLink, int(existingMode), int(newMode)); err != nil {
+		return fmt.Errorf("Error setting mode: %s", err.Error())
 	}
-	nd.mode = newMode
-	return nd.save()
+
+	return nil
 }
 
-func (nd *Node) Touch(mTime time.Time) error {
-	if mTime.After(time.Now()) {
-		nd.mTime = time.Time{}
+func (nd *Node) Touch(newTime time.Time) error {
+	if existingTime := nd.MTime(); existingTime.Equal(newTime) || newTime.IsZero() {
+		return nil
+	} else if newTime.After(time.Now()) {
 		return errors.New("Cannot set modified time in the future")
+	} else if err := nd.updateProperty(mTimeLink, existingTime, newTime.Unix()); err != nil {
+		return fmt.Errorf("Error setting mTime: %s", err.Error())
 	}
 
-	nd.mTime = mTime
-	return nd.save()
+	return nil
+}
+
+func (nd *Node) Move(newParentId string) error {
+	newParent := nd.graph.NodeWithId(newParentId)
+
+	if nd.Parent() != nil && nd.Parent().Id == newParentId {
+		return nil
+	} else if nd.Id == RootNodeId {
+		return errors.New("Error moving node: Cannot move root node")
+	} else if newParentId == nd.Id || newParent.ancestorOf(nd.Id) {
+		return errors.New("Error moving node: Cannot move node inside itself")
+	} else if !newParent.Exists() {
+		return errors.New("Error moving node: Parent does not exist")
+	} else if !newParent.IsDir() {
+		return errors.New("Error moving node: Cannot add node to a non-directory")
+	} else if nd.graph.NodeWithName(newParentId, nd.Name()) != nil {
+		return fmt.Errorf("Error moving node: Node with name %s already exists in %s", nd.Name(), newParent.Name())
+	}
+
+	if nd.Parent() != nil {
+		nd.graph.RemoveQuad(cayley.Triple(nd.Id, parentLink, nd.Parent().Id))
+	}
+
+	return nd.graph.AddQuad(cayley.Triple(nd.Id, parentLink, newParentId))
 }
 
 func (nd *Node) Update(info NodeInfo) error {
 	updates := []func() error{
 		func() error {
-			if info.Name != nd.Name() {
-				return nd.Rename(info.Name)
-			}
-			return nil
+			return nd.SetName(info.Name)
 		},
 		func() error {
-			if nd.Parent() != nil && info.ParentId != nd.Parent().Id {
-				return nd.Move(info.ParentId)
-			}
-			return nil
+			return nd.Move(info.ParentId)
 		},
 		func() error {
-			if info.Mode != nd.Mode() {
-				return nd.Chmod(info.Mode)
-			}
-			return nil
+			return nd.SetMode(info.Mode)
 		},
 		func() error {
-			if info.MTime != nd.MTime() {
-				return nd.Touch(info.MTime)
-			}
-			return nil
+			return nd.Touch(info.MTime)
 		},
 	}
 
@@ -412,10 +347,12 @@ func (nd *Node) String() string {
 	return fmt.Sprintf("%s	%d	%s	%s (%s)", nd.Mode(), nd.Size(), nd.MTime().Format(time.Stamp), nd.Name(), nd.Id)
 }
 
-func (nd *Node) graphValue(key string) (value string) {
-	it := cayley.StartPath(nd.graph, nd.Id).Out(key).BuildIterator()
-	if cayley.RawNext(it) {
-		value = nd.graph.NameOf(it.Result())
+func (nd *Node) graphValue(key string) (value interface{}) {
+	it := path.StartPath(nd.graph, quad.String(nd.Id)).Out(key).BuildIterator()
+	if it.Next() {
+		value = quad.NativeOf(nd.graph.NameOf(it.Result()))
+	} else {
+		return nil
 	}
 
 	return

@@ -9,12 +9,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/sdcoffey/olympus/env"
 	"github.com/sdcoffey/olympus/graph"
-	"github.com/sdcoffey/olympus/util"
 )
 
 type Encoder interface {
@@ -184,20 +182,12 @@ func (restApi OlympusApi) CreateNode(writer http.ResponseWriter, req *http.Reque
 		http.Error(writer, fmt.Sprintf("Node exists, call /v1/touch/%s/ to update this object", node.Id),
 			http.StatusBadRequest)
 	} else {
-		nodeInfo.ParentId = parent.Id
-		nodeInfo.MTime = time.Now()
-
-		if nodeInfo.Type == "" {
-			nodeInfo.Type = util.MimeType(nodeInfo.Name)
-		}
-
-		if newNode, err := restApi.graph.NewNodeWithNodeInfo(nodeInfo); err != nil {
+		if newNode, err := restApi.graph.NewNode(nodeInfo.Name, parent.Id, nodeInfo.Mode); err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
 		} else {
 			encoder := encoderFromHeader(writer, req.Header)
 			writer.WriteHeader(http.StatusCreated)
-			nodeInfo = newNode.NodeInfo()
-			encoder.Encode(nodeInfo)
+			encoder.Encode(newNode.NodeInfo())
 		}
 	}
 }
@@ -222,7 +212,6 @@ func (restApi OlympusApi) UpdateNode(writer http.ResponseWriter, req *http.Reque
 	}
 
 	if err = node.Update(nodeInfo); err != nil {
-		fmt.Println(err.Error())
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 	} else {
 		writer.WriteHeader(http.StatusOK)

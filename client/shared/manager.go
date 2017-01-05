@@ -150,8 +150,15 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 				return nil, errorFmt(err)
 			}
 			wg.Wait()
+			close(uploadChan)
 
-			return manager.graph.NodeWithNodeInfo(newNode), err
+			if localNode, err := manager.graph.NewNode(nodeInfo.Name, parentId, nodeInfo.Mode); err != nil {
+				return nil, errorFmt(err)
+			} else if localNode.Touch(nodeInfo.MTime); err != nil {
+				return nil, errorFmt(err)
+			} else {
+				return localNode, nil
+			}
 		}
 	}
 }

@@ -93,7 +93,7 @@ func (suite *GraphTestSuite) TestWrite_doesNotDuplicateDataOnDisk(t *C) {
 	t.Check(err, IsNil)
 
 	t.Check(fi.Size(), Equals, int64(graph.MEGABYTE))
-	t.Check(time.Now().Sub(createTime) >= time.Second, Equals, true)
+	t.Check(time.Now().UTC().Sub(createTime) >= time.Second, Equals, true)
 }
 
 func (suite *GraphTestSuite) TestWrite_throwsIfBadSize(t *C) {
