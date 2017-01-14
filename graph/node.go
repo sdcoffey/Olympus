@@ -22,13 +22,18 @@ const (
 )
 
 type Node struct {
-	Id    string
-	graph *NodeGraph
+	Id        string
+	graph     *NodeGraph
+	propCache map[string]interface{}
 }
 
 func (nd *Node) Name() string {
-	if val := nd.graphValue(nameLink); val != nil {
+	if val, ok := nd.propCache[nameLink]; ok {
 		return val.(string)
+	} else if val = nd.graphValue(nameLink); val != nil {
+		name := val.(string)
+		nd.propCache[nameLink] = name
+		return name
 	} else {
 		return ""
 	}
@@ -44,7 +49,10 @@ func (nd *Node) Size() (sz int64) {
 }
 
 func (nd *Node) Mode() os.FileMode {
-	if val := nd.graphValue(modeLink); val != nil {
+	if val, ok := nd.propCache[modeLink]; ok {
+		return val.(os.FileMode)
+	} else if val = nd.graphValue(modeLink); val != nil {
+		nd.propCache[modeLink] = os.FileMode(val.(int))
 		return os.FileMode(val.(int))
 	} else {
 		return os.FileMode(0)
@@ -52,8 +60,12 @@ func (nd *Node) Mode() os.FileMode {
 }
 
 func (nd *Node) MTime() time.Time {
-	if val := nd.graphValue(mTimeLink); val != nil {
-		return time.Unix(int64(val.(int)), 0)
+	if val, ok := nd.propCache[mTimeLink]; ok {
+		return val.(time.Time)
+	} else if val := nd.graphValue(mTimeLink); val != nil {
+		t := time.Unix(int64(val.(int)), 0)
+		nd.propCache[mTimeLink] = t
+		return t
 	} else {
 		return time.Time{}
 	}
@@ -70,7 +82,10 @@ func (nd *Node) IsDir() bool {
 
 // Return the logical parent of this node, i.e. the node id with an incoming parent edge from this node.
 func (nd *Node) Parent() *Node {
-	if val := nd.graphValue(parentLink); val != nil {
+	if val, ok := nd.propCache[parentLink]; ok {
+		return nd.graph.NodeWithId(val.(string))
+	} else if val = nd.graphValue(parentLink); val != nil {
+		nd.propCache[parentLink] = val.(string)
 		return nd.graph.NodeWithId(val.(string))
 	} else {
 		return nil
@@ -113,7 +128,7 @@ func (nd *Node) Blocks() []BlockInfo {
 		return make([]BlockInfo, 0)
 	}
 
-	blocks := make([]BlockInfo, 0, 4) // TODO: don't guess
+	blocks := make([]BlockInfo, 0, 4)
 
 	var i int64
 	for i = 0; ; i += BLOCK_SIZE {
@@ -193,6 +208,8 @@ func (nd *Node) SetName(newName string) error {
 		return fmt.Errorf("Error setting name: %s", err.Error())
 	}
 
+	nd.propCache[nameLink] = newName
+
 	return nil
 }
 
@@ -205,17 +222,22 @@ func (nd *Node) SetMode(newMode os.FileMode) error {
 		return fmt.Errorf("Error setting mode: %s", err.Error())
 	}
 
+	nd.propCache[modeLink] = newMode
+
 	return nil
 }
 
 func (nd *Node) Touch(newTime time.Time) error {
+	newTime = newTime.UTC()
 	if existingTime := nd.MTime(); existingTime.Equal(newTime) || newTime.IsZero() {
 		return nil
 	} else if newTime.After(time.Now()) {
 		return errors.New("Cannot set modified time in the future")
-	} else if err := nd.updateProperty(mTimeLink, existingTime.UTC().Unix(), newTime.UTC().Unix()); err != nil {
+	} else if err := nd.updateProperty(mTimeLink, existingTime.Unix(), newTime.Unix()); err != nil {
 		return fmt.Errorf("Error setting mTime: %s", err.Error())
 	}
+
+	nd.propCache[mTimeLink] = newTime
 
 	return nil
 }
@@ -241,7 +263,13 @@ func (nd *Node) Move(newParentId string) error {
 		nd.graph.RemoveQuad(cayley.Triple(nd.Id, parentLink, nd.Parent().Id))
 	}
 
-	return nd.graph.AddQuad(cayley.Triple(nd.Id, parentLink, newParentId))
+	if err := nd.graph.AddQuad(cayley.Triple(nd.Id, parentLink, newParentId)); err != nil {
+		return err
+	} else {
+		nd.propCache[parentLink] = newParentId
+	}
+
+	return nil
 }
 
 func (nd *Node) Update(info NodeInfo) error {

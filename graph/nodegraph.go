@@ -25,14 +25,20 @@ func NewGraph(graph *cayley.Handle) (*NodeGraph, error) {
 	root := new(Node)
 	root.Id = RootNodeId
 	root.graph = ng
+	root.propCache = make(map[string]interface{})
 
+	now := time.Now().UTC()
 	if err := graph.AddQuad(cayley.Triple(RootNodeId, nameLink, "root")); err != nil {
 		return nil, err
 	} else if err = graph.AddQuad(cayley.Triple(RootNodeId, modeLink, int(os.ModeDir))); err != nil {
 		return nil, err
-	} else if err = graph.AddQuad(cayley.Triple(RootNodeId, mTimeLink, time.Now().Unix())); err != nil {
+	} else if err = graph.AddQuad(cayley.Triple(RootNodeId, mTimeLink, now.Unix())); err != nil {
 		return nil, err
 	}
+
+	root.propCache[nameLink] = "root"
+	root.propCache[modeLink] = os.FileMode(os.ModeDir)
+	root.propCache[mTimeLink] = now
 
 	ng.RootNode = root
 
@@ -43,6 +49,7 @@ func (ng *NodeGraph) _newNode() *Node {
 	nd := new(Node)
 	nd.Id = uuid.New()
 	nd.graph = ng
+	nd.propCache = make(map[string]interface{})
 
 	return nd
 }
@@ -72,7 +79,7 @@ func (ng *NodeGraph) NewNode(name, parentId string, mode os.FileMode) (nd *Node,
 }
 
 func (ng *NodeGraph) NodeWithId(id string) *Node {
-	return &Node{Id: id, graph: ng}
+	return &Node{Id: id, graph: ng, propCache: make(map[string]interface{})}
 }
 
 func (ng *NodeGraph) NodeWithName(parentId, name string) *Node {

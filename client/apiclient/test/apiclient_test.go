@@ -110,6 +110,7 @@ func (suite *ApiClientTestSuite) TestApiClient_UpdateNode_updatesNode(t *C) {
 	err = suite.client.UpdateNode(info)
 	t.Check(err, IsNil)
 
+	node = suite.ng.NodeWithId(node.Id)
 	t.Check(node.Name(), Equals, "file.dat")
 	t.Check(node.Mode(), Equals, os.FileMode(0700))
 }
