@@ -129,7 +129,8 @@ func (suite *GraphTestSuite) TestWriteData_writesDataToCorrectBlock(t *C) {
 
 	t.Check(child.WriteData(dat, 0), IsNil)
 
-	blocks := child.Blocks()
+	blocks, err := child.Blocks()
+	t.Check(err, IsNil)
 	t.Check(blocks, HasLen, 1)
 	if len(blocks) > 0 {
 		t.Check(blocks[0].Hash, Matches, fingerprint)
@@ -206,9 +207,10 @@ func (suite *GraphTestSuite) TestBlockWithOffset_returnsEmptyStringForDir(t *C) 
 	t.Check(fingerprint, Equals, "")
 }
 
-func (suite *GraphTestSuite) TestBlocks_returnsEmptySliceForDir(t *C) {
-	blocks := suite.ng.RootNode.Blocks()
-	t.Check(blocks, HasLen, 0)
+func (suite *GraphTestSuite) TestBlocks_throwsForDir(t *C) {
+	blocks, err := suite.ng.RootNode.Blocks()
+	t.Check(err, ErrorMatches, "Cannot fetch blocks for directory")
+	t.Check(blocks, IsNil)
 }
 
 func (suite *GraphTestSuite) TestBlocks_returnsCorrectBlocks(t *C) {
@@ -217,18 +219,27 @@ func (suite *GraphTestSuite) TestBlocks_returnsCorrectBlocks(t *C) {
 
 	block1 := testutils.RandDat(graph.MEGABYTE)
 	block2 := testutils.RandDat(graph.MEGABYTE)
+	block3 := testutils.RandDat(1)
 
 	t.Check(child.WriteData(block1, 0), IsNil)
 	t.Check(child.WriteData(block2, graph.MEGABYTE), IsNil)
+	t.Check(child.WriteData(block3, graph.MEGABYTE * 2), IsNil)
 
-	blocks := child.Blocks()
-	t.Assert(blocks, HasLen, 2)
+	blocks, err := child.Blocks()
+	t.Assert(err, IsNil)
+	t.Assert(blocks, HasLen, 3)
 
 	t.Check(blocks[0].Offset, Equals, int64(0))
 	t.Check(blocks[1].Offset, Equals, int64(graph.MEGABYTE))
+	t.Check(blocks[2].Offset, Equals, int64(graph.MEGABYTE * 2))
 
 	t.Check(blocks[0].Hash, Equals, graph.Hash(block1))
 	t.Check(blocks[1].Hash, Equals, graph.Hash(block2))
+	t.Check(blocks[2].Hash, Equals, graph.Hash(block3))
+
+	t.Check(blocks[0].Size, Equals, int64(graph.MEGABYTE))
+	t.Check(blocks[1].Size, Equals, int64(graph.MEGABYTE))
+	t.Check(blocks[2].Size, Equals, int64(1))
 }
 
 func (suite *GraphTestSuite) TestChmod_chmodsSuccessfully(t *C) {

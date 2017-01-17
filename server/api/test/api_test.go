@@ -386,6 +386,7 @@ func (suite *ApiTestSuite) TestBlocks_listsBlocksForNode(t *C) {
 	t.Assert(blocks, HasLen, 1)
 	t.Check(blocks[0].Offset, Equals, int64(0))
 	t.Check(blocks[0].Hash, Equals, hash)
+	t.Check(blocks[0].Size, Equals, graph.BLOCK_SIZE)
 }
 
 func (suite *ApiTestSuite) TestBlocks_returns404ForMissingNode(t *C) {

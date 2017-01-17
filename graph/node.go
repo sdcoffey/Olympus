@@ -40,9 +40,9 @@ func (nd *Node) Name() string {
 }
 
 func (nd *Node) Size() (sz int64) {
-	for _, block := range nd.Blocks() {
-		blockSize, _ := SizeOnDisk(block.Hash)
-		sz += blockSize
+	blocks, _ := nd.Blocks()
+	for _, block := range blocks {
+		sz += block.Size
 	}
 
 	return
@@ -123,9 +123,9 @@ func (nd *Node) BlockWithOffset(offset int64) string {
 	}
 }
 
-func (nd *Node) Blocks() []BlockInfo {
+func (nd *Node) Blocks() ([]BlockInfo, error) {
 	if nd.IsDir() {
-		return make([]BlockInfo, 0)
+		return nil, errors.New("Cannot fetch blocks for directory")
 	}
 
 	blocks := make([]BlockInfo, 0, 4)
@@ -134,9 +134,15 @@ func (nd *Node) Blocks() []BlockInfo {
 	for i = 0; ; i += BLOCK_SIZE {
 		it := path.StartPath(nd.graph, quad.String(nd.Id)).Out(fmt.Sprint("offset-", i)).BuildIterator()
 		if it.Next() {
+			hash := quad.NativeOf(nd.graph.NameOf(it.Result())).(string)
+			sz, err := SizeOnDisk(hash)
+			if err != nil {
+				return nil, fmt.Errorf("Error fetching blocks for node %s: %s", nd.Id, err.Error())
+			}
 			info := BlockInfo{
 				Hash:   quad.NativeOf(nd.graph.NameOf(it.Result())).(string),
 				Offset: i,
+				Size: sz,
 			}
 			blocks = append(blocks, info)
 		} else {
@@ -144,7 +150,7 @@ func (nd *Node) Blocks() []BlockInfo {
 		}
 	}
 
-	return blocks
+	return blocks, nil
 }
 
 func (nd *Node) WriteData(data []byte, offset int64) error {

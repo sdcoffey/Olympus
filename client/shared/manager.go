@@ -14,6 +14,9 @@ import (
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/util"
+	"io"
+	"io/ioutil"
+	"runtime"
 )
 
 type Manager struct {
@@ -88,6 +91,7 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 			ParentId: parentId,
 			Type:     util.MimeType(fi.Name()),
 		}
+
 		if newNode, err := manager.api.CreateNode(nodeInfo); err != nil {
 			return nil, errorFmt(err)
 		} else if localFile, err := os.Open(localPath); err != nil {
@@ -98,6 +102,7 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 			errChan := make(chan error)
 			uploadChan := make(chan heap, 5)
 			defer close(uploadChan)
+			defer close(errChan)
 
 			var wg sync.WaitGroup
 			numBlocks := int(fi.Size() / graph.BLOCK_SIZE)
@@ -107,7 +112,7 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 
 			wg.Add(numBlocks)
 			var uploadedBytes int64
-			for i := 0; i < 5; i++ { // TODO: min(numblocks, 5)
+			for i := 0; i < min(int64(numBlocks), int64(runtime.GOMAXPROCS(-1))); i++ {
 				go func() {
 					for h := range uploadChan {
 						payloadSize := int64(len(h.data))
@@ -149,8 +154,8 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 			if err := errChecker(); err != nil {
 				return nil, errorFmt(err)
 			}
+
 			wg.Wait()
-			close(uploadChan)
 
 			if localNode, err := manager.graph.NewNode(nodeInfo.Name, parentId, nodeInfo.Mode); err != nil {
 				return nil, errorFmt(err)
@@ -161,6 +166,63 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 			}
 		}
 	}
+}
+
+func (manager *Manager) DownloadNode(nodeId, localPath string, callback ProgressCallback) (err error) {
+	errorFmt := func(err error) error {
+		return fmt.Errorf("Error downloading file: %s", err.Error())
+	}
+
+	f, err := os.OpenFile(localPath, os.O_APPEND|os.O_EXCL|os.O_RDWR, os.FileMode(0700))
+	if err != nil {
+		return errorFmt(err)
+	} else {
+		defer f.Close()
+	}
+
+	blocks, err := manager.api.ListBlocks(nodeId)
+	if err != nil {
+		return errorFmt(err)
+	}
+
+	var sz int64
+	for _, block := range blocks {
+		sz += block.Size
+	}
+
+	writeChan := make(chan heap)
+	errChan := make(chan error)
+
+	var count int64
+	var rd io.Reader
+	for i := 0; i < len(blocks) && err == nil; i ++ {
+		go func() {
+			rd, err = manager.api.ReadBlock(nodeId, blocks[i].Offset)
+			if err != nil {
+				errChan <- err
+			} else {
+				buf, _ := ioutil.ReadAll(rd)
+				h := heap{blocks[i].Offset, buf}
+				writeChan <- h
+				count += int64(len(buf))
+			}
+		}()
+	}
+
+	for range blocks {
+		select {
+		case err := <- errChan:
+			return errorFmt(err)
+		case h := <- writeChan:
+			_, err := f.WriteAt(h.data, h.offset)
+			callback(sz, count)
+			if err != nil {
+				return errorFmt(err)
+			}
+		}
+	}
+
+	return nil
 }
 
 type heap struct {

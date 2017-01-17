@@ -18,4 +18,5 @@ type NodeInfo struct {
 type BlockInfo struct {
 	Hash   string
 	Offset int64
+	Size 	int64
 }
