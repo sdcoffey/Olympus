@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
+
+	"io/ioutil"
 
 	. "github.com/sdcoffey/olympus/checkers"
 	"github.com/sdcoffey/olympus/graph"
@@ -24,7 +25,9 @@ func (suite *ApiTestSuite) TestListNodes_returns404IfFileNotExist(t *C) {
 	t.Check(err, IsNil)
 
 	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
-	t.Check(msg(resp), Matches, "Node with id: not-a-node does not exist\n")
+	apiResponse := decode(resp, nil)
+	t.Check(apiResponse.Error.Code, Equals, api.NO_SUCH_NODE)
+	t.Check(apiResponse.Error.Details, Equals, "not-a-node")
 }
 
 func (suite *ApiTestSuite) TestListNodes_returnsFilesForValidParent(t *C) {
@@ -90,7 +93,10 @@ func (suite *ApiTestSuite) TestRmFile_returnsErrorIfFileNotExist(t *C) {
 	t.Check(err, IsNil)
 	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
 
-	t.Check(msg(resp), Matches, "Node with id: child does not exist\n")
+	apiResponse := decode(resp, nil)
+	t.Check(apiResponse.Error, Not(IsNil))
+
+	t.Check(string(apiResponse.Error.Code), Matches, "no_such_node")
 }
 
 func (suite *ApiTestSuite) TestRmFile_removesFileSuccessfully(t *C) {
@@ -226,7 +232,7 @@ func (suite *ApiTestSuite) TestCreateNode_returns400WhenNodeExists(t *C) {
 	t.Check(err, IsNil)
 	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
 
-	t.Check(msg(resp), Contains, "Node exists")
+	t.Check(msg(resp), Contains, "node_exists")
 }
 
 func (suite *ApiTestSuite) TestCreateNode_createsNodeSuccessfully(t *C) {
@@ -448,7 +454,7 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForMismatchedHashes(t *C) {
 	resp, err := suite.client.Do(req)
 	t.Check(err, IsNil)
 	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
-	t.Check(msg(resp), Contains, "does not match")
+	t.Check(msg(resp), Contains, "incongruous_hash")
 }
 
 func (suite *ApiTestSuite) TestWriteBlock_returns400ForInvalidOffset(t *C) {
@@ -507,7 +513,7 @@ func (suite *ApiTestSuite) TestWriteBlock_returns400ForJunkOffest(t *C) {
 
 	t.Check(err, IsNil)
 	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
-	t.Check(msg(resp), Contains, "Invalid offset parameter")
+	t.Check(msg(resp), Contains, "invalid_param")
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns404ForMissingNode(t *C) {
@@ -531,7 +537,11 @@ func (suite *ApiTestSuite) TestReadBlock_returns400ForDir(t *C) {
 	t.Check(err, IsNil)
 
 	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
-	t.Check(msg(resp), Contains, fmt.Sprintf("Requested node id %s is a directory", id))
+
+	apiResponse := decode(resp, nil)
+	t.Check(apiResponse.Error, Not(IsNil))
+	t.Check(string(apiResponse.Error.Code), Equals, "node_is_dir")
+	t.Check(apiResponse.Error.Details, Equals, id)
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns404ForMisalignedOffset(t *C) {
@@ -548,7 +558,11 @@ func (suite *ApiTestSuite) TestReadBlock_returns404ForMisalignedOffset(t *C) {
 	t.Check(err, IsNil)
 
 	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
-	t.Check(msg(resp), Contains, fmt.Sprintf("Block at offset %d not found", offset))
+
+	apiResponse := decode(resp, nil)
+	t.Check(apiResponse.Error, Not(IsNil))
+	t.Check(string(apiResponse.Error.Code), Equals, "no_such_block")
+	t.Check(apiResponse.Error.Details, Equals, "1")
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns400ForJunkOffset(t *C) {
@@ -565,7 +579,11 @@ func (suite *ApiTestSuite) TestReadBlock_returns400ForJunkOffset(t *C) {
 	t.Check(err, IsNil)
 
 	t.Check(resp.StatusCode, Equals, http.StatusBadRequest)
-	t.Check(msg(resp), Contains, fmt.Sprintf("Invalid offset parameter: %s", offset))
+
+	apiResponse := decode(resp, nil)
+	t.Check(apiResponse.Error, Not(IsNil))
+	t.Check(string(apiResponse.Error.Code), Equals, "invalid_param")
+	t.Check(apiResponse.Error.Details, Contains, "junk")
 }
 
 func (suite *ApiTestSuite) TestReadBlock_returns404WhenBlockDoesntExist(t *C) {
@@ -582,7 +600,11 @@ func (suite *ApiTestSuite) TestReadBlock_returns404WhenBlockDoesntExist(t *C) {
 	t.Check(err, IsNil)
 
 	t.Check(resp.StatusCode, Equals, http.StatusNotFound)
-	t.Check(msg(resp), Contains, fmt.Sprintf("Block at offset %d not found", offset))
+
+	apiResponse := decode(resp, nil)
+	t.Check(apiResponse.Error, Not(IsNil))
+	t.Check(string(apiResponse.Error.Code), Equals, "no_such_block")
+	t.Check(apiResponse.Error.Details, Equals, "0")
 }
 
 func (suite *ApiTestSuite) TestReadBlock_redirectsWhenBlockFound(t *C) {
@@ -610,10 +632,10 @@ func (suite *ApiTestSuite) createNode(parentId string, nodeInfo graph.NodeInfo) 
 	} else if resp.StatusCode != http.StatusCreated {
 		return "", errors.New(msg(resp))
 	} else {
-		defer resp.Body.Close()
 		decoder := json.NewDecoder(resp.Body)
 		var created graph.NodeInfo
-		decoder.Decode(&created)
+		data := api.NewDataResponse(&created)
+		decoder.Decode(&data)
 		return created.Id, nil
 	}
 }
@@ -670,10 +692,15 @@ func encode(v interface{}) io.Reader {
 	return &buf
 }
 
-func decode(resp *http.Response, v interface{}) {
-	defer resp.Body.Close()
+func decode(resp *http.Response, data interface{}) api.ApiResponse {
+	var response api.ApiResponse
+	response.Data = data
 	decoder := json.NewDecoder(resp.Body)
-	decoder.Decode(v)
+	if decodeErr := decoder.Decode(&response); decodeErr != nil {
+		panic(decodeErr)
+	}
+
+	return response
 }
 
 func fileData(size int) (string, io.Reader) {
@@ -685,7 +712,6 @@ func msg(resp *http.Response) string {
 	defer resp.Body.Close()
 	dat, _ := ioutil.ReadAll(resp.Body)
 	return string(dat)
-
 }
 
 func endpointFmt(baseUrl, method string) string {

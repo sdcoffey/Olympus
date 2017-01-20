@@ -117,5 +117,5 @@ func (suite *ApiClientTestSuite) TestApiClient_UpdateNode_updatesNode(t *C) {
 
 func (suite *ApiClientTestSuite) TestApiClient_do_readsErrorFromBodyOnNonOkStatus(t *C) {
 	_, err := suite.client.ListNodes("not-found")
-	t.Check(err, ErrorMatches, "Node with id: not-found does not exist\n")
+	t.Check(err, ErrorMatches, "^no_such_node => not-found$")
 }

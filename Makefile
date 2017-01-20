@@ -1,13 +1,10 @@
-pkgs = client/apiclient	client/cli	client/shared	env	graph	peer	server	server/api
+pkgs = $(shell glide novendor)
 
 all: build-all
 
 clean:
 	@rm -rf build
-	@go fmt ./...
-	@for package in $(pkgs); do \
-		goimports -w ./$$package ; \
-	done
+	@go fmt $(pkgs)
 
 build-all: clean
 	@mkdir -p build/bin
@@ -37,5 +34,5 @@ test: clean
 	done
 
 testcover: clean
-	@go test -cover ./...
+	@go test -cover $(pkgs)
 

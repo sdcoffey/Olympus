@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -144,29 +143,27 @@ func (client ApiClient) do(req *http.Request, body interface{}, responseBody int
 
 	if resp, err := http.DefaultClient.Do(req); err != nil {
 		return err
-	} else if err = client.errorFromResponse(resp); err != nil {
-		return err
-	} else {
-		if responseBody != nil {
-			defer resp.Body.Close()
-			decoder := client.decoder(resp.Body)
-			return decoder.Decode(responseBody)
+	} else if responseBody != nil {
+		var response = api.ApiResponse{
+			Data: responseBody,
 		}
+
+		defer resp.Body.Close()
+		decoder := client.decoder(resp.Body)
+		if err = decoder.Decode(&response); err != nil {
+			return fmt.Errorf("Error unmarsharaling response => %s", err)
+		} else if response.Error != nil {
+			return response.Error
+		} else {
+			return nil
+		}
+	} else {
 		return nil
 	}
 }
 
 func (client ApiClient) url(path string) string {
 	return fmt.Sprint(client.Address, "/v1", path)
-}
-
-func (client ApiClient) errorFromResponse(resp *http.Response) error {
-	if resp.StatusCode >= http.StatusBadRequest {
-		defer resp.Body.Close()
-		errorMessage, _ := ioutil.ReadAll(resp.Body)
-		return errors.New(string(errorMessage))
-	}
-	return nil
 }
 
 func (client ApiClient) encoder(wr io.Writer) api.Encoder {
