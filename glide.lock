@@ -1,5 +1,5 @@
-hash: 4c3ecf57418ccd2d288ee56e325bb509cdbfd740fb26508036f44df32f4a9d0d
-updated: 2016-12-29T15:33:52.618425983-08:00
+hash: eec81a9d5336e04f10b7e67d48b59ba2c6e568ee7e8767fdbb46441b10e4b012
+updated: 2017-03-31T18:43:01.71658505-04:00
 imports:
 - name: github.com/boltdb/bolt
   version: a705895fdad108f053eae7ee011ed94a0541ee13
@@ -16,6 +16,8 @@ imports:
   - graph/proto
   - quad
   - writer
+- name: github.com/chzyer/readline
+  version: 62c6fe6193755f722b8b8788aa7357be55a50ff1
 - name: github.com/codegangsta/cli
   version: 0bdeddeeb0f650497d603c4ad7b20cfe685682f6
 - name: github.com/gogo/protobuf
@@ -47,14 +49,12 @@ imports:
 - name: gopkg.in/check.v1
   version: 20d25e2804050c1cd24a7eea1e7a6447dd0e74ec
 - name: gopkg.in/cheggaaa/pb.v1
-  version: d7e6ca3010b6f084d8056847f55d7f572f180678
+  version: 0817e3a1f8de9e3c78b159699b3c07d53e24a963
 testImports:
 - name: github.com/davecgh/go-spew
   version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
   subpackages:
   - spew
-- name: github.com/google/cayley
-  version: f03d046d906cc8e207609b4e43788023a669a39c
 - name: github.com/pmezard/go-difflib
   version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:

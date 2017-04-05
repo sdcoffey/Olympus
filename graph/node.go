@@ -94,6 +94,10 @@ func (nd *Node) Parent() *Node {
 
 // Return the logical children of this node, i.e, all nodes from which an incoming edge is pointed at this node.
 func (nd *Node) Children() []*Node {
+	return nd.ChildrenSorted(Alphabetical)
+}
+
+func (nd *Node) ChildrenSorted(sorter Sorter) []*Node {
 	if !nd.IsDir() {
 		return make([]*Node, 0)
 	}
@@ -105,7 +109,7 @@ func (nd *Node) Children() []*Node {
 		children = append(children, child)
 	}
 
-	Sort(children, Alphabetical)
+	Sort(children, sorter)
 
 	return children
 }

@@ -3,12 +3,12 @@ package shared
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
-
-	"fmt"
 
 	"github.com/cayleygraph/cayley"
 	"github.com/sdcoffey/olympus/client/apiclient"
@@ -66,6 +66,34 @@ func (manager *Manager) MoveNode(nodeId, newParentId, newName string) error {
 		Name:     newName,
 	}
 	return manager.api.UpdateNode(nodeInfo)
+}
+
+func (manager *Manager) FindNodeByPath(path string) (*graph.Node, error) {
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("Error finding node by path (%s) => path must be absolute", path)
+	}
+
+	path = string(path[1:])
+
+	pathComponents := strings.Split(path, string(filepath.Separator))
+	model, err := manager.Model(graph.RootNodeId)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting model for node => %s", err)
+	}
+
+	for i, component := range pathComponents {
+		if i < len(pathComponents)-1 {
+			node := model.FindNodeByName(component)
+			model, err = manager.Model(node.Id)
+			if err != nil {
+				return nil, fmt.Errorf("Error getting model for node => %s", err)
+			}
+		} else {
+			return model.FindNodeByName(component), nil
+		}
+	}
+
+	return nil, fmt.Errorf("Error finding node by path (%s) => not found")
 }
 
 type ProgressCallback func(total, current int64)
@@ -150,7 +178,6 @@ func (manager *Manager) UploadFile(parentId, localPath string, callback Progress
 				return nil, errorFmt(err)
 			}
 			wg.Wait()
-			close(uploadChan)
 
 			if localNode, err := manager.graph.NewNode(nodeInfo.Name, parentId, nodeInfo.Mode); err != nil {
 				return nil, errorFmt(err)

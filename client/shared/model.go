@@ -35,9 +35,8 @@ func (model *Model) init() error {
 }
 
 func (model *Model) Refresh() error {
-	nodeSet := make(map[string]bool)
 	for _, nodeOnDisk := range model.Root.Children() {
-		nodeSet[nodeOnDisk.Id] = true
+		model.graph.RemoveNode(nodeOnDisk)
 	}
 
 	if nodeInfos, err := model.api.ListNodes(model.Root.Id); err != nil {
@@ -50,20 +49,9 @@ func (model *Model) Refresh() error {
 			if err = curNode.Update(nodeInfos[i]); err != nil {
 				break
 			}
-			if _, ok := nodeSet[curNode.Id]; ok {
-				delete(nodeSet, curNode.Id)
-			}
 		}
 
 		if err != nil {
-			return fmt.Errorf("Error refreshing model: %s", err.Error())
-		}
-	}
-
-	var staleNode *graph.Node
-	for id := range nodeSet {
-		staleNode = model.graph.NodeWithId(id)
-		if err := model.graph.RemoveNode(staleNode); err != nil {
 			return fmt.Errorf("Error refreshing model: %s", err.Error())
 		}
 	}

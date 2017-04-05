@@ -2,37 +2,30 @@ package graph
 
 import "sort"
 
-type sortType int
+type Sorter int
 
 const (
-	Alphabetical = iota
-	ReverseAlphabetical
+	Alphabetical Sorter = iota + 1
+	DateModified
 )
 
-func Sort(nodes []*Node, sType sortType) {
-	sort.Sort(nodeSorter{nodes, sType})
+func Reversed(s Sorter) Sorter {
+	return Sorter(-int(s))
 }
 
-type nodeSorter struct {
-	nodes []*Node
-	sType sortType
-}
-
-func (b nodeSorter) Len() int {
-	return len(b.nodes)
-}
-
-func (b nodeSorter) Swap(i, j int) {
-	b.nodes[i], b.nodes[j] = b.nodes[j], b.nodes[i]
-}
-
-func (a nodeSorter) Less(i, j int) bool {
-	switch a.sType {
-	case Alphabetical:
-		return a.nodes[i].Name() < a.nodes[j].Name()
-	case ReverseAlphabetical:
-		return a.nodes[i].Name() > a.nodes[j].Name()
-	default:
-		return false
-	}
+func Sort(nodes []*Node, sType Sorter) {
+	sort.Slice(nodes, func(i, j int) bool {
+		switch sType {
+		case Alphabetical:
+			return nodes[i].Name() < nodes[j].Name()
+		case -Alphabetical:
+			return nodes[i].Name() > nodes[j].Name()
+		case DateModified:
+			return nodes[i].MTime().Before(nodes[j].MTime())
+		case -DateModified:
+			return nodes[i].MTime().After(nodes[j].MTime())
+		default:
+			return false
+		}
+	})
 }

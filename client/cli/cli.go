@@ -1,19 +1,22 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/cayleygraph/cayley"
+	"github.com/chzyer/readline"
 	"github.com/codegangsta/cli"
 	"github.com/sdcoffey/olympus/client/apiclient"
 	"github.com/sdcoffey/olympus/client/shared"
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
+	"github.com/sdcoffey/olympus/server/api"
 	"github.com/wsxiaoys/terminal/color"
 	"gopkg.in/cheggaaa/pb.v1"
 )
@@ -36,7 +39,7 @@ func main() {
 		if olympusAddress, err := peer.FindServer(time.Second * 5); err != nil {
 			color.Println("@rCould not find Olympus Instance on network: " + err.Error())
 		} else {
-			address = olympusAddress.String()
+			address = olympusAddress.String() + ":3000"
 			color.Println("@gFound Olympus At:", olympusAddress.String())
 		}
 	}
@@ -44,7 +47,8 @@ func main() {
 	if !strings.HasPrefix(address, "http") {
 		address = "http://" + address
 	}
-	client := apiclient.ApiClient{Address: address}
+
+	client := apiclient.ApiClient{Address: address, Encoding: api.JsonEncoding}
 
 	var err error
 	manager = shared.NewManager(client, handle)
@@ -92,27 +96,43 @@ func main() {
 			Action: put,
 		},
 		{
-			Name:  "exit",
-			Usage: "Exit Olympus Cli",
-			Action: func(c *cli.Context) {
-				os.Exit(0)
-			},
+			Name:   "mv",
+			Usage:  "Move or rename file",
+			Action: mv,
 		},
 	}
 
-	linePrefix := func() {
-		color.Print("@gOLYMPUS")
-		color.Printf("@y (%s)", workingDirectory())
-		fmt.Print(" $ ")
+	config := &readline.Config{
+		Prompt:          color.Sprintf("@g O @y(%s) $ ", workingDirectory()),
+		HistoryFile:     "/tmp/readline.tmp",
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
 	}
 
-	linePrefix()
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		args := strings.Split(strings.TrimSpace(scanner.Text()), " ")
+	l, err := readline.NewEx(config)
+	if err != nil {
+		panic(err)
+	}
+
+	defer l.Close()
+
+	for {
+		line, err := l.Readline()
+		if err == readline.ErrInterrupt {
+			if len(line) == 0 {
+				break
+			} else {
+				continue
+			}
+		} else if err == io.EOF {
+			break
+		}
+
+		line = strings.TrimSpace(line)
+		args := strings.Split(strings.TrimSpace(line), " ")
 		args = append([]string{"olympus"}, args...) // This is a hack :(
 		app.Run(args)
-		linePrefix()
+		config.Prompt = color.Sprintf("@g O @y(%s) $ ", workingDirectory())
 	}
 }
 
@@ -197,6 +217,8 @@ func rm(c *cli.Context) {
 	} else if err := manager.RemoveNode(node.Id); err != nil {
 		color.Println("@r", err.Error())
 	}
+
+	model.Refresh()
 }
 
 func put(c *cli.Context) {
@@ -206,18 +228,68 @@ func put(c *cli.Context) {
 	}
 	target := c.Args()[0]
 
-	file, _ := os.Stat(target)
-	bar := pb.StartNew(int(file.Size()))
-	bar.SetUnits(pb.U_BYTES)
+	file, err := os.Stat(target)
+	if err != nil {
+		color.Println("@rError uploading file -> ", err.Error())
+	} else {
+		bar := pb.StartNew(int(file.Size()))
+		bar.SetUnits(pb.U_BYTES)
 
-	updateCallback := func(total, progress int64) {
-		bar.Set(int(progress))
+		updateCallback := func(total, progress int64) {
+			bar.Set(int(progress))
+		}
+
+		if _, err := manager.UploadFile(model.Root.Id, target, updateCallback); err != nil {
+			color.Println(fmt.Sprintf("@rError uploading %s: %s", target, err.Error()))
+		} else {
+			bar.FinishPrint("Finished Uploading")
+			model.Refresh()
+		}
+	}
+}
+
+func mv(c *cli.Context) {
+	if len(c.Args()) < 2 {
+		color.Println("@yNot enough arguments in call to mv")
+		return
 	}
 
-	if _, err := manager.UploadFile(model.Root.Id, target, updateCallback); err != nil {
-		color.Println(fmt.Sprintf("@rError uploading %s: %s", target, err.Error()))
+	target := c.Args()[0]
+	destination := c.Args()[1]
+
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(workingDirectory(), target)
+	}
+
+	if !filepath.IsAbs(destination) {
+		destination = filepath.Join(workingDirectory(), destination)
+	}
+
+	var targetNode, destinationNode *graph.Node
+	var tErr, dErr error
+
+	targetNode, tErr = manager.FindNodeByPath(target)
+	destinationNode, dErr = manager.FindNodeByPath(destination)
+
+	if tErr != nil || dErr != nil {
+		color.Println("@rError resolving path => ", tErr.Error(), dErr.Error())
+		return
+	}
+
+	newFilename := filepath.Base(target)
+	if destinationNode == nil {
+		destinationNode, dErr = manager.FindNodeByPath(filepath.Dir(destination))
+		if dErr != nil {
+			color.Println("@rError resolving path => ", tErr.Error(), dErr.Error())
+			return
+		}
+		newFilename = filepath.Base(destination)
+	}
+
+	err := manager.MoveNode(targetNode.Id, destinationNode.Id, newFilename)
+	if err != nil {
+		color.Println("@rError moving node => ", err.Error())
 	} else {
-		bar.FinishPrint("Finished Uploading")
 		model.Refresh()
 	}
 }

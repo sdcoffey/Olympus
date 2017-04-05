@@ -69,11 +69,9 @@ func (client ApiClient) WriteBlock(nodeId string, offset int64, hash string, dat
 func (client ApiClient) RemoveNode(nodeId string) error {
 	if request, err := client.request(api.RemoveNode, nodeId); err != nil {
 		return err
-	} else if err := client.do(request, nil, nil); err != nil {
-		return err
+	} else {
+		return client.do(request, nil, nil)
 	}
-
-	return nil
 }
 
 func (client ApiClient) CreateNode(info graph.NodeInfo) (graph.NodeInfo, error) {

@@ -109,6 +109,44 @@ func (suite *GraphTestSuite) TestChildren_returnsCorrectChildren(t *C) {
 	t.Check(children[0].Name(), Matches, "child3")
 }
 
+func (suite *GraphTestSuite) TestChildrenSorted_returnsSortedAlpha(t *C) {
+	_, err := suite.ng.NewNode("a", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	_, err = suite.ng.NewNode("b", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	children := suite.ng.RootNode.ChildrenSorted(graph.Alphabetical)
+
+	t.Check(children[0].Name(), Equals, "a")
+	t.Check(children[1].Name(), Equals, "b")
+
+	children = suite.ng.RootNode.ChildrenSorted(graph.Reversed(graph.Alphabetical))
+
+	t.Check(children[0].Name(), Equals, "b")
+	t.Check(children[1].Name(), Equals, "a")
+}
+
+func (suite *GraphTestSuite) TestChildrenSorted_returnsSortedMTime(t *C) {
+	b, err := suite.ng.NewNode("b", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+	b.Touch(time.Now().Add(-10 * time.Second))
+
+	_, err = suite.ng.NewNode("a", graph.RootNodeId, os.FileMode(0755))
+	t.Check(err, IsNil)
+
+	children := suite.ng.RootNode.ChildrenSorted(graph.DateModified)
+
+	t.Check(children[0].Name(), Equals, "b")
+	t.Check(children[1].Name(), Equals, "a")
+
+	children = nil
+	children = suite.ng.RootNode.ChildrenSorted(graph.Reversed(graph.DateModified))
+
+	t.Check(children[0].Name(), Equals, "a")
+	t.Check(children[1].Name(), Equals, "b")
+}
+
 func (suite *GraphTestSuite) TestParent(t *C) {
 	rootNode := suite.ng.RootNode
 	t.Check(rootNode.Parent(), IsNil)

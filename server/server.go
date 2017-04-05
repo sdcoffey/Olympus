@@ -12,6 +12,7 @@ import (
 	"github.com/sdcoffey/olympus/graph"
 	"github.com/sdcoffey/olympus/peer"
 	"github.com/sdcoffey/olympus/server/api"
+	"github.com/wsxiaoys/terminal/color"
 )
 
 var debug = false
@@ -19,6 +20,7 @@ var debug = false
 func main() {
 	env.InitializeEnvironment()
 	if nodeGraph, err := initDb(); err != nil {
+		color.Println("@r", err)
 		os.Exit(1)
 	} else {
 		go peer.ClientHeartbeat()
