@@ -106,7 +106,10 @@ func main() {
 		Prompt:          color.Sprintf("@g O @y(%s) $ ", workingDirectory()),
 		HistoryFile:     "/tmp/readline.tmp",
 		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
+		AutoComplete: readline.NewPrefixCompleter(
+			readline.PcItem("put", readline.PcItemDynamic(FsCompelter)),
+		),
+		EOFPrompt: "exit",
 	}
 
 	l, err := readline.NewEx(config)
@@ -137,11 +140,11 @@ func main() {
 }
 
 func initDb() *cayley.Handle {
-	graph, err := cayley.NewMemoryGraph()
+	g, err := cayley.NewMemoryGraph()
 	if err != nil {
 		panic(err)
 	}
-	return graph
+	return g
 }
 
 func ls(c *cli.Context) {
